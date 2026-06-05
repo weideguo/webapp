@@ -1,0 +1,2560 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>K8S show</title>
+    <script src="https://cdn.jsdelivr.net/npm/vue@3.5.35/dist/vue.global.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/js-yaml@4.2.0/dist/js-yaml.min.js"></script>
+    <!--<script src="./libs/vue.global.min.js"></script>
+    <script src="./libs/js-yaml.min.js"></script>-->
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            height: 100vh;
+            display: flex;
+            background-color: #f8fafc;
+        }
+
+        #app {
+            display: flex;
+            width: 100%;
+            height: 100%;
+        }
+
+        .sidebar {
+            width: 180px;
+            background-color: #1e293b;
+            color: #e2e8f0;
+            padding: 0 0;
+            transition: width 0.3s ease;
+            height: 100vh;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            flex-shrink: 0;
+        }
+
+        .sidebar.collapsed {
+            width: 60px;
+        }
+
+        .sidebar-header {
+            padding: 16px 20px;
+            cursor: pointer;
+            border-bottom: 1px solid #334155;
+            margin-bottom: 10px;
+            text-align: center;
+        }
+
+        .sidebar-header-left {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .sidebar-header:hover {
+            background-color: #334155;
+        }
+
+        .sidebar-title {
+            font-size: 18px;
+            font-weight: bold;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            display: block;
+        }
+
+        .settings-btn {
+            background: none;
+            border: none;
+            color: #e2e8f0;
+            cursor: pointer;
+            padding: 4px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 4px;
+            transition: background-color 0.2s;
+        }
+
+        .settings-btn:hover {
+            background-color: #334155;
+        }
+
+        .settings-btn svg {
+            width: 20px;
+            height: 20px;
+        }
+
+        .sidebar-footer {
+            padding: 12px 20px;
+            background-color: #1e293b;
+            border-top: 1px solid #334155;
+            box-sizing: border-box;
+            flex-shrink: 0;
+        }
+
+        .sidebar.collapsed .sidebar-footer {
+            padding: 12px;
+        }
+
+        .sidebar ul {
+            list-style: none;
+            padding-bottom: 0;
+            margin: 0;
+            flex: 1;
+            overflow-y: auto;
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+
+        .sidebar ul::-webkit-scrollbar {
+            display: none;
+        }
+
+        .sidebar li {
+            padding: 12px 12px;
+            cursor: pointer;
+            transition: all 0.3s;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            opacity: 0.6;
+        }
+
+        .sidebar li:hover {
+            background-color: #334155;
+            opacity: 0.8;
+        }
+
+        .sidebar li.active {
+            position: relative;
+            opacity: 1;
+        }
+
+        .sidebar li.active::before {
+            content: '';
+            position: absolute;
+            left: 0;
+            top: 0;
+            bottom: 0;
+            width: 3px;
+            background-color: #38bdf8;
+        }
+
+        .sidebar li span {
+            width: 20px;
+            height: 20px;
+        }
+
+        .content {
+            flex: 1;
+            padding: 24px;
+            overflow-y: auto;
+        }
+
+        .content-header {
+            margin-bottom: 24px;
+        }
+
+        .host-info {
+            font-size: 14px;
+            color: #64748b;
+            margin-bottom: 8px;
+        }
+
+        .content-header h1 {
+            font-size: 24px;
+            color: #1e293b;
+            margin-bottom: 8px;
+        }
+
+        .content-header p {
+            color: #64748b;
+        }
+
+        .card {
+            background-color: white;
+            border-radius: 8px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+            padding: 20px;
+        }
+
+        .card-title {
+            font-size: 16px;
+            font-weight: 600;
+            color: #1e293b;
+            margin-bottom: 16px;
+        }
+
+        .header-right {
+            position: absolute;
+            top: 36px;
+            right: 36px;
+        }
+
+        .namespace-selector {
+            padding: 8px 12px;
+            border: 1px solid #cbd5e0;
+            border-radius: 6px;
+            background-color: white;
+            color: #1e293b;
+            font-size: 14px;
+            min-width: 200px;
+            cursor: pointer;
+        }
+
+        .namespace-selector:focus {
+            outline: none;
+            border-color: #0ea5e9;
+            box-shadow: 0 0 0 3px rgba(14, 165, 233, 0.2);
+        }
+
+        .table-container {
+            overflow-x: auto;
+        }
+
+        .data-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 14px;
+        }
+
+        .data-table th,
+        .data-table td {
+            padding: 12px 16px;
+            text-align: left;
+            border-bottom: 1px solid #e2e8f0;
+        }
+
+        .data-table th {
+            background-color: #f1f5f9;
+            font-weight: 600;
+            color: #475569;
+        }
+
+        .data-table tr:hover {
+            background-color: #f1f5f9;
+        }
+
+        .ready-column {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .progress-bar {
+            flex: 1;
+            height: 6px;
+            background-color: #e2e8f0;
+            border-radius: 3px;
+            overflow: hidden;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background-color: #22c55e;
+            border-radius: 3px;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #64748b;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 40px;
+            color: #64748b;
+        }
+
+        .more-btn {
+            padding: 4px 12px;
+            background-color: #0ea5e9;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 13px;
+            transition: background-color 0.2s;
+        }
+
+        .more-btn:hover {
+            background-color: #0284c7;
+        }
+
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+
+        .modal-overlay.hidden {
+            display: none;
+        }
+
+        .modal-content {
+            background-color: white;
+            width: 90%;
+            height: 100%;
+            border-radius: 8px;
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+            position: relative;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .modal-header {
+            padding: 16px 20px;
+            border-bottom: 1px solid #e2e8f0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background-color: #f8fafc;
+        }
+
+        .modal-header h2 {
+            font-size: 18px;
+            color: #1e293b;
+            margin: 0;
+        }
+
+        .modal-close {
+            width: 32px;
+            height: 32px;
+            border: none;
+            background-color: transparent;
+            color: #64748b;
+            font-size: 20px;
+            cursor: pointer;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            border-radius: 4px;
+            transition: background-color 0.2s;
+        }
+
+        .modal-close:hover {
+            background-color: #e2e8f0;
+            color: #475569;
+        }
+
+        .modal-body {
+            flex: 1;
+            padding: 0px 20px;
+            overflow-y: auto;
+        }
+
+        .modal-footer {
+            padding: 16px 20px;
+            border-top: 1px solid #e2e8f0;
+            background-color: #f8fafc;
+            display: flex;
+            justify-content: flex-end;
+            gap: 12px;
+        }
+
+        .settings-footer {
+            padding: 14px 20px;
+            border-top: 1px solid #e2e8f0;
+            background-color: #f8fafc;
+            display: flex;
+            justify-content: flex-end;
+            gap: 12px;
+        }
+
+        .detail-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 16px;
+        }
+
+        .detail-item {
+            padding: 12px;
+            background-color: #f1f5f9;
+            border-radius: 6px;
+        }
+
+        .detail-label {
+            font-size: 13px;
+            color: #64748b;
+            margin-bottom: 4px;
+        }
+
+        .detail-value {
+            font-size: 14px;
+            color: #1e293b;
+            font-weight: 500;
+        }
+
+        .modal-tabs {
+            display: flex;
+            border-bottom: 1px solid #e2e8f0;
+            background-color: #f8fafc;
+        }
+
+        .tab-btn {
+            padding: 12px 20px;
+            border: none;
+            background-color: transparent;
+            color: #475569;
+            font-size: 14px;
+            cursor: pointer;
+            transition: all 0.2s;
+            border-bottom: 2px solid transparent;
+        }
+
+        .tab-btn:hover {
+            background-color: #e2e8f0;
+            color: #1e293b;
+        }
+
+        .tab-btn.active {
+            color: #0ea5e9;
+            border-bottom-color: #0ea5e9;
+            background-color: white;
+        }
+
+        .yaml-content {
+            white-space: pre-wrap;
+            word-break: break-all;
+            font-family: 'Consolas', 'Monaco', monospace;
+            font-size: 13px;
+            line-height: 1.6;
+            color: #d4d4d4;
+            background-color: #1e1e1e;
+            padding: 16px;
+            margin: 0;
+            box-sizing: border-box;
+            border-radius: 6px;
+        }
+
+        .yaml-actions {
+            display: flex;
+            gap: 8px;
+        }
+
+        .action-btn-wrapper {
+            position: relative;
+        }
+
+        .action-btn {
+            padding: 6px 12px;
+            background-color: #0ea5e9;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 13px;
+            transition: background-color 0.2s;
+        }
+
+        .action-btn:hover {
+            background-color: #0284c7;
+        }
+
+        .gray-text {
+            color: #94a3b8;
+            font-weight: normal;
+        }
+
+        .dropdown-menu {
+            position: absolute;
+            bottom: 100%;
+            right: 0;
+            min-width: 150px;
+            max-width: 400px;
+            max-height: 300px;
+            overflow-y: auto;
+            background-color: white;
+            border: 1px solid #e2e8f0;
+            border-radius: 6px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+            z-index: 100;
+        }
+
+        .dropdown-item {
+            padding: 8px 12px;
+            cursor: pointer;
+            border-bottom: 1px solid #f1f5f9;
+            word-break: break-all;
+            white-space: normal;
+        }
+
+        .dropdown-menu.hidden {
+            display: none;
+        }
+
+        .custom-select-options.hidden {
+            display: none;
+        }
+
+        .dropdown-item {
+            padding: 8px 16px;
+            cursor: pointer;
+            transition: background-color 0.2s;
+            font-size: 13px;
+            color: #1e293b;
+        }
+
+        .dropdown-item:hover {
+            background-color: #f1f5f9;
+        }
+
+        .dropdown-item:first-child {
+            border-radius: 6px 6px 0 0;
+        }
+
+        .dropdown-item:last-child {
+            border-radius: 0 0 6px 6px;
+        }
+
+        .resource-modal-content {
+            width: 85%;
+            height: 100%;
+        }
+
+        .resource-modal-content2 {
+            width: 80%;
+            height: 100%;
+        }
+
+        .settings-modal-content {
+            width: 50%;
+            height: 50%;
+        }
+
+        .settings-form {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        .settings-modal-content {
+            width: 50% !important;
+            height: auto !important;
+            max-height: 70vh;
+        }
+
+        .settings-body {
+            padding: 20px;
+            overflow-y: auto;
+        }
+
+        .settings-form {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        .form-group {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .form-group label {
+            font-weight: 500;
+            color: #475569;
+            font-size: 14px;
+        }
+
+        .form-input {
+            padding: 10px 14px;
+            border: 1px solid #e2e8f0;
+            border-radius: 6px;
+            font-size: 14px;
+            transition: border-color 0.2s, box-shadow 0.2s;
+            color: #1e293b;
+        }
+
+        .form-input:focus {
+            outline: none;
+            border-color: #0ea5e9;
+            box-shadow: 0 0 0 3px rgba(14, 165, 233, 0.1);
+        }
+
+        .host-input-wrapper,
+        .add-host-wrapper {
+            display: flex;
+            gap: 8px;
+        }
+
+        .custom-select {
+            flex: 1;
+            position: relative;
+        }
+
+        .custom-select-trigger {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 8px 12px;
+            border: 1px solid #e2e8f0;
+            border-radius: 6px;
+            background-color: white;
+            cursor: pointer;
+            font-size: 14px;
+            color: #1e293b;
+        }
+
+        .custom-select-arrow {
+            font-size: 12px;
+            color: #94a3b8;
+        }
+
+        .placeholder {
+            color: #94a3b8;
+        }
+
+        .pre-wrapper {
+            position: relative;
+        }
+
+        .copy-btn {
+            position: absolute;
+            top: 8px;
+            right: 8px;
+            padding: 4px 8px;
+            font-size: 12px;
+            color: #94a3b8;
+            background-color: #334155;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            opacity: 0;
+            transition: opacity 0.2s;
+            z-index: 10;
+        }
+
+        .pre-wrapper:hover .copy-btn {
+            opacity: 1;
+        }
+
+        .copy-btn:hover {
+            background-color: #475569;
+            color: #ffffff;
+        }
+
+        .custom-select-options {
+            position: absolute;
+            top: 100%;
+            left: 0;
+            right: 0;
+            margin-top: 4px;
+            border: 1px solid #e2e8f0;
+            border-radius: 6px;
+            background-color: white;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+            z-index: 100;
+        }
+
+        .custom-select-option {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 8px 12px;
+            cursor: pointer;
+            font-size: 14px;
+            color: #1e293b;
+        }
+
+        .custom-select-option:hover {
+            background-color: #f1f5f9;
+        }
+
+        .custom-select-option.disabled {
+            color: #94a3b8;
+            cursor: not-allowed;
+        }
+
+        .host-name {
+            flex: 1;
+            text-align: left;
+        }
+
+        .host-desc {
+            color: #94a3b8;
+            font-size: 12px;
+            text-align: right;
+            margin-left: 12px;
+            flex-shrink: 0;
+        }
+
+        .add-host-wrapper .form-input {
+            flex: 1;
+        }
+
+        .delete-host-btn,
+        .add-host-btn {
+            padding: 8px 16px;
+            background-color: #ef4444;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: background-color 0.2s;
+        }
+
+        .delete-host-btn:disabled {
+            background-color: #cbd5e0;
+            cursor: not-allowed;
+        }
+
+        .delete-host-btn:hover:not(:disabled) {
+            background-color: #dc2626;
+        }
+
+        .add-host-btn {
+            background-color: #0ea5e9;
+        }
+
+        .add-host-btn:hover {
+            background-color: #0284c7;
+        }
+
+        .form-actions {
+            flex-direction: row;
+            justify-content: flex-end;
+            gap: 12px;
+            margin-top: 10px;
+        }
+
+        .confirm-btn {
+            padding: 10px 24px;
+            background-color: #22c55e;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: background-color 0.2s;
+        }
+
+        .confirm-btn:hover {
+            background-color: #16a34a;
+        }
+
+        .cancel-btn {
+            padding: 10px 24px;
+            background-color: #e2e8f0;
+            color: #475569;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: background-color 0.2s;
+        }
+
+        .cancel-btn:hover {
+            background-color: #cbd5e0;
+        }
+
+        .pagination {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 12px;
+            margin-top: 20px;
+            padding-top: 16px;
+            border-top: 1px solid #e2e8f0;
+        }
+
+        .page-size-selector {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 14px;
+            color: #64748b;
+        }
+
+        .page-size-selector select {
+            padding: 4px 8px;
+            border: 1px solid #e2e8f0;
+            border-radius: 6px;
+            font-size: 14px;
+            background-color: white;
+            cursor: pointer;
+            color: #1e293b;
+        }
+
+        .page-size-selector select:focus {
+            outline: none;
+            border-color: #0ea5e9;
+        }
+
+        .pods-content,
+        .describe-content {
+            font-family: 'Consolas', 'Monaco', monospace;
+            font-size: 13px;
+            line-height: 1.6;
+            color: #d4d4d4;
+            background-color: #1e1e1e;
+            padding: 16px;
+            margin: 0;
+            border-radius: 6px;
+            box-sizing: border-box;
+        }
+
+        .pagination button {
+            padding: 6px 12px;
+            border: 1px solid #e2e8f0;
+            border-radius: 6px;
+            background-color: white;
+            color: #475569;
+            cursor: pointer;
+            font-size: 14px;
+            transition: all 0.2s;
+        }
+
+        .pagination button:hover:not(:disabled) {
+            background-color: #f1f5f9;
+            border-color: #cbd5e0;
+        }
+
+        .pagination button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .pagination button.active {
+            background-color: #0ea5e9;
+            color: white;
+            border-color: #0ea5e9;
+        }
+
+        .pagination button.active:hover:not(:disabled) {
+            background-color: #0284c7;
+            color: white;
+            border-color: #0284c7;
+        }
+
+        .pagination-info {
+            margin-right: 12px;
+            font-size: 14px;
+            color: #64748b;
+        }
+
+        .page-size-selector {
+            padding: 4px 8px;
+            border: 1px solid #e2e8f0;
+            border-radius: 4px;
+            font-size: 14px;
+            margin-left: 12px;
+        }
+    </style>
+</head>
+<body>
+    <div id="app">
+        <!-- 侧边栏 -->
+        <div :class="['sidebar', { collapsed: sidebarCollapsed }]">
+            <div class="sidebar-header" @click="toggleSidebar">
+                <span class="sidebar-title">{{ sidebarCollapsed ? '▶' : 'K8S show' }}</span>
+            </div>
+            <ul>
+                <li 
+                    v-for="item in menuItems" 
+                    :key="item.key"
+                    :class="{ active: activeMenu === item.key }"
+                    @click="switchMenu(item.key)"
+                >
+                    <span>{{ sidebarCollapsed ? item.label.slice(0, 3) : item.label }}</span>
+                </li>
+            </ul>
+            <div class="sidebar-footer">
+                <button v-if="!sidebarCollapsed" class="settings-btn" @click="openSettingsModal" title="设置">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="12" cy="12" r="3"></circle>
+                        <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+                    </svg>
+                </button>
+            </div>
+        </div>
+
+        <!-- 主内容区 -->
+        <div class="content">
+            <!-- 右上角命名空间选择器 -->
+            <div v-if="showNamespaceSelector" class="header-right">
+                <select v-model="selectedNamespace" class="namespace-selector" @change="handleNamespaceChange">
+                    <option value="ALL">ALL</option>
+                    <option v-for="ns in namespaces" :key="ns" :value="ns">{{ ns }}</option>
+                </select>
+            </div>
+
+            <!-- 内容标题 -->
+            <div class="content-header">
+                <div class="host-info">
+                    <span>{{ host ? `${host} - ${getHostDesc(host)}` : '未设置主机' }}</span>
+                </div>
+                <h1>{{ currentTitle }}</h1>
+            </div>
+
+            <!-- 内容主体 -->
+            <div class="card">
+                <div v-if="loading" class="loading">加载中...</div>
+                
+                <!-- Nodes 表格 -->
+                <div v-else-if="activeMenu === 'nodes'" class="table-container">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>NAME</th>
+                                <th>STATUS</th>
+                                <th>ROLES</th>
+                                <th>AGE</th>
+                                <th>VERSION</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr v-for="node in paginatedNodes" :key="node.name">
+                                <td>{{ node.name }}</td>
+                                <td>{{ node.status }}</td>
+                                <td>{{ node.roles }}</td>
+                                <td>{{ node.age }}</td>
+                                <td>{{ node.version }}</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    <div v-if="nodes.length > 0" class="pagination">
+                        <span class="pagination-info">共 {{ nodes.length }} 条记录</span>
+                        <span class="page-size-selector">
+                            每页
+                            <select v-model="pageSize" @change="handlePageSizeChange">
+                                <option :value="10">10</option>
+                                <option :value="15">15</option>
+                                <option :value="50">50</option>
+                                <option :value="100">100</option>
+                                <option :value="500">500</option>
+                            </select>
+                            条
+                        </span>
+                        <button @click="prevPage" :disabled="currentPage === 1">上一页</button>
+                        <button 
+                            v-for="(page, index) in pageButtons" 
+                            :key="index" 
+                            :class="{ active: currentPage === page, disabled: page === '...' }"
+                            :disabled="page === '...'"
+                            @click="goToPage(page)"
+                        >{{ page }}</button>
+                        <button @click="nextPage" :disabled="currentPage === totalPages">下一页</button>
+                    </div>
+                </div>
+
+                <!-- Deployments 表格 -->
+                <div v-else-if="activeMenu === 'deploy'" class="table-container">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>NAMESPACE</th>
+                                <th>NAME</th>
+                                <th>READY</th>
+                                <th>UP-TO-DATE</th>
+                                <th>AVAILABLE</th>
+                                <th>AGE</th>
+                                <th>操作</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr v-for="deploy in paginatedDeploys" :key="deploy.name">
+                                <td>{{ deploy.namespace }}</td>
+                                <td>{{ deploy.name }}</td>
+                                <td class="ready-column">
+                                    <span>{{ deploy.ready }}</span>
+                                    <div class="progress-bar">
+                                        <div class="progress-fill" :style="{ width: deploy.readyPercent + '%' }"></div>
+                                    </div>
+                                </td>
+                                <td>{{ deploy.upToDate }}</td>
+                                <td>{{ deploy.available }}</td>
+                                <td>{{ deploy.age }}</td>
+                                <td><button class="more-btn" @click="showDeployDetail(deploy)">更多</button></td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    <div v-if="deploys.length > 0" class="pagination">
+                        <span class="pagination-info">共 {{ deploys.length }} 条记录</span>
+                        <span class="page-size-selector">
+                            每页
+                            <select v-model="pageSize" @change="handlePageSizeChange">
+                                <option :value="10">10</option>
+                                <option :value="15">15</option>
+                                <option :value="50">50</option>
+                                <option :value="100">100</option>
+                                <option :value="500">500</option>
+                            </select>
+                            条
+                        </span>
+                        <button @click="prevPage" :disabled="currentPage === 1">上一页</button>
+                        <button 
+                            v-for="(page, index) in pageButtons" 
+                            :key="index" 
+                            :class="{ active: currentPage === page, disabled: page === '...' }"
+                            :disabled="page === '...'"
+                            @click="goToPage(page)"
+                        >{{ page }}</button>
+                        <button @click="nextPage" :disabled="currentPage === totalPages">下一页</button>
+                    </div>
+                </div>
+
+                <!-- Ingress 表格 -->
+                <div v-else-if="activeMenu === 'ingress'" class="table-container">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>NAMESPACE</th>
+                                <th>NAME</th>
+                                <th>CLASS</th>
+                                <th>HOSTS</th>
+                                <th>ADDRESS</th>
+                                <th>PORTS</th>
+                                <th>AGE</th>
+                                <th>操作</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr v-for="ingress in paginatedIngresses" :key="ingress.name">
+                                <td>{{ ingress.namespace }}</td>
+                                <td>{{ ingress.name }}</td>
+                                <td>{{ ingress.class }}</td>
+                                <td>{{ ingress.hosts }}</td>
+                                <td>{{ ingress.address }}</td>
+                                <td>{{ ingress.ports }}</td>
+                                <td>{{ ingress.age }}</td>
+                                <td><button class="more-btn" @click="showIngressDetail(ingress)">更多</button></td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    <div v-if="ingresses.length > 0" class="pagination">
+                        <span class="pagination-info">共 {{ ingresses.length }} 条记录</span>
+                        <span class="page-size-selector">
+                            每页
+                            <select v-model="pageSize" @change="handlePageSizeChange">
+                                <option :value="10">10</option>
+                                <option :value="15">15</option>
+                                <option :value="50">50</option>
+                                <option :value="100">100</option>
+                                <option :value="500">500</option>
+                            </select>
+                            条
+                        </span>
+                        <button @click="prevPage" :disabled="currentPage === 1">上一页</button>
+                        <button 
+                            v-for="(page, index) in pageButtons" 
+                            :key="index" 
+                            :class="{ active: currentPage === page, disabled: page === '...' }"
+                            :disabled="page === '...'"
+                            @click="goToPage(page)"
+                        >{{ page }}</button>
+                        <button @click="nextPage" :disabled="currentPage === totalPages">下一页</button>
+                    </div>
+                </div>
+
+                <!-- DaemonSets 表格 -->
+                <div v-else-if="activeMenu === 'daemonsets'" class="table-container">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>NAMESPACE</th>
+                                <th>NAME</th>
+                                <th>DESIRED</th>
+                                <th>CURRENT</th>
+                                <th>READY</th>
+                                <th>UP-TO-DATE</th>
+                                <th>AVAILABLE</th>
+                                <th>AGE</th>
+                                <th>操作</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr v-for="ds in paginatedDaemonSets" :key="ds.name">
+                                <td>{{ ds.namespace }}</td>
+                                <td>{{ ds.name }}</td>
+                                <td>{{ ds.desired }}</td>
+                                <td>{{ ds.current }}</td>
+                                <td>{{ ds.ready }}</td>
+                                <td>{{ ds.upToDate }}</td>
+                                <td>{{ ds.available }}</td>
+                                <td>{{ ds.age }}</td>
+                                <td><button class="more-btn" @click="showDaemonSetDetail(ds)">更多</button></td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    <div v-if="daemonSets.length > 0" class="pagination">
+                        <span class="pagination-info">共 {{ daemonSets.length }} 条记录</span>
+                        <span class="page-size-selector">
+                            每页
+                            <select v-model="pageSize" @change="handlePageSizeChange">
+                                <option :value="10">10</option>
+                                <option :value="15">15</option>
+                                <option :value="50">50</option>
+                                <option :value="100">100</option>
+                                <option :value="500">500</option>
+                            </select>
+                            条
+                        </span>
+                        <button @click="prevPage" :disabled="currentPage === 1">上一页</button>
+                        <button 
+                            v-for="(page, index) in pageButtons" 
+                            :key="index" 
+                            :class="{ active: currentPage === page, disabled: page === '...' }"
+                            :disabled="page === '...'"
+                            @click="goToPage(page)"
+                        >{{ page }}</button>
+                        <button @click="nextPage" :disabled="currentPage === totalPages">下一页</button>
+                    </div>
+                </div>
+
+                <!-- StatefulSets 表格 -->
+                <div v-else-if="activeMenu === 'statefulsets'" class="table-container">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>NAMESPACE</th>
+                                <th>NAME</th>
+                                <th>READY</th>
+                                <th>AGE</th>
+                                <th>操作</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr v-for="ss in paginatedStatefulSets" :key="ss.name">
+                                <td>{{ ss.namespace }}</td>
+                                <td>{{ ss.name }}</td>
+                                <td>{{ ss.ready }}</td>
+                                <td>{{ ss.age }}</td>
+                                <td><button class="more-btn" @click="showStatefulSetDetail(ss)">更多</button></td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    <div v-if="statefulSets.length > 0" class="pagination">
+                        <span class="pagination-info">共 {{ statefulSets.length }} 条记录</span>
+                        <span class="page-size-selector">
+                            每页
+                            <select v-model="pageSize" @change="handlePageSizeChange">
+                                <option :value="10">10</option>
+                                <option :value="15">15</option>
+                                <option :value="50">50</option>
+                                <option :value="100">100</option>
+                                <option :value="500">500</option>
+                            </select>
+                            条
+                        </span>
+                        <button @click="prevPage" :disabled="currentPage === 1">上一页</button>
+                        <button 
+                            v-for="(page, index) in pageButtons" 
+                            :key="index" 
+                            :class="{ active: currentPage === page, disabled: page === '...' }"
+                            :disabled="page === '...'"
+                            @click="goToPage(page)"
+                        >{{ page }}</button>
+                        <button @click="nextPage" :disabled="currentPage === totalPages">下一页</button>
+                    </div>
+                </div>
+
+                <!-- 空状态 -->
+                <div v-else class="empty-state">暂无数据</div>
+            </div>
+        </div>
+
+        <!-- Deploy 详情弹窗 -->
+        <div :class="{ hidden: !showDeployModal }" class="modal-overlay" @click.self="closeDeployModal">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h2>{{ deployDetailTitle }}</h2>
+                    <button class="modal-close" @click="closeDeployModal">×</button>
+                </div>
+                <div class="modal-tabs">
+                    <button :class="{ active: deployActiveTab === 'yaml' }" class="tab-btn" @click="deployActiveTab = 'yaml'">YAML</button>
+                    <button :class="{ active: deployActiveTab === 'pods' }" class="tab-btn" @click="deployActiveTab = 'pods'">Pods</button>
+                    <button :class="{ active: deployActiveTab === 'describe' }" class="tab-btn" @click="deployActiveTab = 'describe'">Describe</button>
+                </div>
+                <div class="modal-body">
+                    <!-- YAML 内容 -->
+                    <template v-if="deployActiveTab === 'yaml'">
+                        <div class="pre-wrapper">
+                            <button class="copy-btn" @click="copyToClipboard(deployYamlContent)">复制</button>
+                            <pre class="yaml-content">{{ deployYamlContent }}</pre>
+                        </div>
+                    </template>
+                    <!-- Pods 内容 -->
+                    <template v-else-if="deployActiveTab === 'pods'">
+                        <div class="table-container">
+                            <table class="data-table">
+                                <thead>
+                                    <tr>
+                                        <th>NAME</th>
+                                        <th>READY</th>
+                                        <th>STATUS</th>
+                                        <th>RESTARTS</th>
+                                        <th>AGE</th>
+                                        <th>IP</th>
+                                        <th>NODE</th>
+                                        <th>NOMINATED</th>
+                                        <th>READINESS </th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr v-for="pod in deployPods" :key="pod.name">
+                                        <td>{{ pod.name }}</td>
+                                        <td>{{ pod.ready }}</td>
+                                        <td>{{ pod.status }}</td>
+                                        <td>{{ pod.restarts }}</td>
+                                        <td>{{ pod.age }}</td>
+                                        <td>{{ pod.ip }}</td>
+                                        <td>{{ pod.node }}</td>
+                                        <td>{{ pod.nominated }}</td>
+                                        <td>{{ pod.readiness }}</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </template>
+                    <!-- Describe 内容 -->
+                    <template v-else-if="deployActiveTab === 'describe'">
+                        <div class="pre-wrapper">
+                            <button class="copy-btn" @click="copyToClipboard(deployDescribeContent)">复制</button>
+                            <pre class="describe-content">{{ deployDescribeContent }}</pre>
+                        </div>
+                    </template>
+                </div>
+                <!-- YAML 按钮区域 -->
+                <div v-if="deployActiveTab === 'yaml'" class="modal-footer">
+                    <div class="yaml-actions">
+                        <div class="action-btn-wrapper">
+                            <button class="action-btn" @click="toggleDropdown('configmaps')">ConfigMaps</button>
+                            <div :class="{ hidden: !dropdowns.configmaps }" class="dropdown-menu">
+                                <div v-for="item in deployConfigMaps" :key="item.refName" class="dropdown-item" @click="showResourceYaml('configmap', item.refName)">{{ item.refName }}</div>
+                                <div v-if="deployConfigMaps.length === 0" class="dropdown-item">暂无数据</div>
+                            </div>
+                        </div>
+                        <div class="action-btn-wrapper">
+                            <button class="action-btn" @click="toggleDropdown('secrets')">Secrets</button>
+                            <div :class="{ hidden: !dropdowns.secrets }" class="dropdown-menu">
+                                <div v-for="item in deploySecrets" :key="item.refName" class="dropdown-item" @click="showResourceYaml('secret', item.refName)">{{ item.refName }}</div>
+                                <div v-if="deploySecrets.length === 0" class="dropdown-item">暂无数据</div>
+                            </div>
+                        </div>
+                        <div class="action-btn-wrapper">
+                            <button class="action-btn" @click="toggleDropdown('pvc')">PVC</button>
+                            <div :class="{ hidden: !dropdowns.pvc }" class="dropdown-menu">
+                                <div v-for="item in deployPVCs" :key="item.refName" class="dropdown-item" @click="showResourceYaml('pvc', item.refName)">{{ item.refName }}</div>
+                                <div v-if="deployPVCs.length === 0" class="dropdown-item">暂无数据</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Ingress 详情弹窗 -->
+        <div :class="{ hidden: !showIngressModal }" class="modal-overlay" @click.self="closeIngressModal">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h2>{{ ingressDetailTitle }}</h2>
+                    <button class="modal-close" @click="closeIngressModal">×</button>
+                </div>
+                <div class="modal-body">
+                    <div class="pre-wrapper">
+                        <button class="copy-btn" @click="copyToClipboard(ingressYamlContent)">复制</button>
+                        <pre class="yaml-content">{{ ingressYamlContent }}</pre>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <div class="yaml-actions">
+                        <div class="action-btn-wrapper">
+                            <button class="action-btn" @click="toggleDropdown('ingressSvc')">SVC</button>
+                            <div :class="{ hidden: !dropdowns.ingressSvc }" class="dropdown-menu">
+                                <div v-for="svc in ingressServices" :key="svc.name" class="dropdown-item" @click="showResourceYaml('service', svc.name, svc.namespace)">{{ svc.name }}</div>
+                                <div v-if="ingressServices.length === 0" class="dropdown-item">暂无关联服务</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- DaemonSet 详情弹窗 -->
+        <div :class="{ hidden: !showDaemonSetModal }" class="modal-overlay" @click.self="closeDaemonSetModal">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h2>{{ daemonSetDetailTitle }}</h2>
+                    <button class="modal-close" @click="closeDaemonSetModal">×</button>
+                </div>
+                <div class="modal-body">
+                    <div class="pre-wrapper">
+                        <button class="copy-btn" @click="copyToClipboard(daemonSetYamlContent)">复制</button>
+                        <pre class="yaml-content">{{ daemonSetYamlContent }}</pre>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <div class="yaml-actions">
+                        <div class="action-btn-wrapper">
+                            <button class="action-btn" @click="toggleDropdown('configmaps')">ConfigMaps</button>
+                            <div :class="{ hidden: !dropdowns.configmaps }" class="dropdown-menu">
+                                <div v-for="item in deployConfigMaps" :key="item.refName" class="dropdown-item" @click="showResourceYaml('configmap', item.refName)">{{ item.refName }}</div>
+                                <div v-if="deployConfigMaps.length === 0" class="dropdown-item">暂无数据</div>
+                            </div>
+                        </div>
+                        <div class="action-btn-wrapper">
+                            <button class="action-btn" @click="toggleDropdown('secrets')">Secrets</button>
+                            <div :class="{ hidden: !dropdowns.secrets }" class="dropdown-menu">
+                                <div v-for="item in deploySecrets" :key="item.refName" class="dropdown-item" @click="showResourceYaml('secret', item.refName)">{{ item.refName }}</div>
+                                <div v-if="deploySecrets.length === 0" class="dropdown-item">暂无数据</div>
+                            </div>
+                        </div>
+                        <div class="action-btn-wrapper">
+                            <button class="action-btn" @click="toggleDropdown('pvc')">PVC</button>
+                            <div :class="{ hidden: !dropdowns.pvc }" class="dropdown-menu">
+                                <div v-for="item in deployPVCs" :key="item.refName" class="dropdown-item" @click="showResourceYaml('pvc', item.refName)">{{ item.refName }}</div>
+                                <div v-if="deployPVCs.length === 0" class="dropdown-item">暂无数据</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- StatefulSet 详情弹窗 -->
+        <div :class="{ hidden: !showStatefulSetModal }" class="modal-overlay" @click.self="closeStatefulSetModal">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h2>{{ statefulSetDetailTitle }}</h2>
+                    <button class="modal-close" @click="closeStatefulSetModal">×</button>
+                </div>
+                <div class="modal-body">
+                    <div class="pre-wrapper">
+                        <button class="copy-btn" @click="copyToClipboard(statefulSetYamlContent)">复制</button>
+                        <pre class="yaml-content">{{ statefulSetYamlContent }}</pre>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <div class="yaml-actions">
+                        <div class="action-btn-wrapper">
+                            <button class="action-btn" @click="toggleDropdown('configmaps')">ConfigMaps</button>
+                            <div :class="{ hidden: !dropdowns.configmaps }" class="dropdown-menu">
+                                <div v-for="item in deployConfigMaps" :key="item.refName" class="dropdown-item" @click="showResourceYaml('configmap', item.refName)">{{ item.refName }}</div>
+                                <div v-if="deployConfigMaps.length === 0" class="dropdown-item">暂无数据</div>
+                            </div>
+                        </div>
+                        <div class="action-btn-wrapper">
+                            <button class="action-btn" @click="toggleDropdown('secrets')">Secrets</button>
+                            <div :class="{ hidden: !dropdowns.secrets }" class="dropdown-menu">
+                                <div v-for="item in deploySecrets" :key="item.refName" class="dropdown-item" @click="showResourceYaml('secret', item.refName)">{{ item.refName }}</div>
+                                <div v-if="deploySecrets.length === 0" class="dropdown-item">暂无数据</div>
+                            </div>
+                        </div>
+                        <div class="action-btn-wrapper">
+                            <button class="action-btn" @click="toggleDropdown('pvc')">PVC</button>
+                            <div :class="{ hidden: !dropdowns.pvc }" class="dropdown-menu">
+                                <div v-for="item in deployPVCs" :key="item.refName" class="dropdown-item" @click="showResourceYaml('pvc', item.refName)">{{ item.refName }}</div>
+                                <div v-if="deployPVCs.length === 0" class="dropdown-item">暂无数据</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 资源详情弹窗 -->
+        <div :class="{ hidden: !showResourceModal }" class="modal-overlay" @click.self="closeResourceModal">
+            <div class="modal-content resource-modal-content">
+                <div class="modal-header">
+                    <h2>{{ resourceDetailTitle }}</h2>
+                    <button class="modal-close" @click="closeResourceModal">×</button>
+                </div>
+                <div class="modal-body">
+                    <div class="pre-wrapper">
+                        <button class="copy-btn" @click="copyToClipboard(resourceYamlContent)">复制</button>
+                        <pre class="yaml-content">{{ resourceYamlContent }}</pre>
+                    </div>
+                </div>
+                <!-- ConfigMap 内容格式化按钮 -->
+                <div v-if="resourceType === 'configmap' && configMapDataKeys.length > 0" class="modal-footer">
+                    <div class="yaml-actions">
+                        <div class="action-btn-wrapper">
+                            <button class="action-btn" @click="toggleDropdown('formatContent')">内容格式化</button>
+                            <div :class="{ hidden: !dropdowns.formatContent }" class="dropdown-menu">
+                                <div v-for="key in configMapDataKeys" :key="key" class="dropdown-item" @click="showConfigMapContent(key)">{{ key }}</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <!-- PVC PV按钮 -->
+                <div v-if="resourceType === 'pvc' && pvcVolumeName" class="modal-footer">
+                    <div class="yaml-actions">
+                        <button class="action-btn" @click="showPVYaml(pvcVolumeName)">PV</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ConfigMap 内容弹窗 -->
+        <div :class="{ hidden: !showConfigMapContentModal }" class="modal-overlay" @click.self="closeConfigMapContentModal">
+            <div class="modal-content resource-modal-content2">
+                <div class="modal-header">
+                    <h2>{{ resourceDetailTitle }} <span class="gray-text"># {{ configMapCurrentKey }}</span></h2>
+                    <button class="modal-close" @click="closeConfigMapContentModal">×</button>
+                </div>
+                <div class="modal-body">
+                    <div class="pre-wrapper">
+                        <button class="copy-btn" @click="copyToClipboard(configMapContent)">复制</button>
+                        <pre class="yaml-content">{{ configMapContent }}</pre>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- PV 详情弹窗 -->
+        <div :class="{ hidden: !showPVModal }" class="modal-overlay" @click.self="closePVModal">
+            <div class="modal-content resource-modal-content2">
+                <div class="modal-header">
+                    <h2>{{ pvDetailTitle }}</h2>
+                    <button class="modal-close" @click="closePVModal">×</button>
+                </div>
+                <div class="modal-body">
+                    <div class="pre-wrapper">
+                        <button class="copy-btn" @click="copyToClipboard(pvYamlContent)">复制</button>
+                        <pre class="yaml-content">{{ pvYamlContent }}</pre>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 设置弹窗 -->
+        <div :class="{ hidden: !showSettingsModal }" class="modal-overlay" @click.self="closeSettingsModal">
+            <div class="modal-content settings-modal-content">
+                <div class="modal-header">
+                    <h2>后端接口设置</h2>
+                    <button class="modal-close" @click="closeSettingsModal">×</button>
+                </div>
+                <div class="modal-body settings-body" @click="closeHostDropdown">
+                    <div class="settings-form">
+                        <div class="form-group">
+                            <label>baseUrl</label>
+                            <input 
+                                type="text" 
+                                v-model="settingsBaseUrl" 
+                                placeholder="请输入后端接口基础URL，如：http://127.0.0.1:8000/api/v1/hostExecution?permanent_token=aaaaaaaabbbbbbbbbcccccccccdddddd"
+                                class="form-input"
+                            >
+                        </div>
+                        <div class="form-group">
+                            <label>host</label>
+                            <div class="host-input-wrapper">
+                                <div class="custom-select" @click="toggleHostDropdown">
+                                    <div class="custom-select-trigger">
+                                        <span :class="{ 'placeholder': !settingsHost }">{{ settingsHost || '请选择执行k8s命令的host' }}</span>
+                                        <span class="custom-select-arrow">▼</span>
+                                    </div>
+                                    <div :class="{ hidden: !showHostDropdown }" class="custom-select-options">
+                                        <div v-for="item in hostList" :key="item.name" 
+                                             class="custom-select-option" 
+                                             @click="(e) => selectHost(e, item.name)">
+                                            <span class="host-name">{{ item.name }}</span>
+                                            <span class="host-desc">{{ item.description || '无描述' }}</span>
+                                        </div>
+                                        <div v-if="hostList.length === 0" class="custom-select-option disabled">暂无host</div>
+                                    </div>
+                                </div>
+                                <button class="delete-host-btn" @click="deleteHost" :disabled="!settingsHost" title="删除选中host">删除</button>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label>添加新host</label>
+                            <div class="add-host-wrapper">
+                                <input 
+                                    type="text" 
+                                    v-model="newHost" 
+                                    placeholder="输入新host，如：192.168.0.1"
+                                    class="form-input"
+                                >
+                                <input 
+                                    type="text" 
+                                    v-model="newHostDesc" 
+                                    placeholder="输入新host描述"
+                                    class="form-input"
+                                >
+                                <button class="add-host-btn" @click="addHost">添加</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer settings-footer">
+                    <button class="confirm-btn" @click="confirmSettings">确认</button>
+                    <button class="cancel-btn" @click="closeSettingsModal">取消</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const { createApp, ref, computed, onMounted, watch } = Vue
+
+        createApp({
+            setup() {
+                // 菜单配置
+                const menuItems = ref([
+                    { key: 'nodes', label: 'Nodes',  },
+                    { key: 'daemonsets', label: 'DaemonSets', },
+                    { key: 'statefulsets', label: 'StatefulSets', },
+                    { key: 'deploy', label: 'Deploy', },
+                    { key: 'ingress', label: 'Ingress',},
+                ])
+
+                // 状态管理
+                const activeMenu = ref('nodes')
+                const sidebarCollapsed = ref(false)
+                const loading = ref(false)
+                const namespaces = ref([])
+                const selectedNamespace = ref('ALL')
+                
+                // 分页
+                const currentPage = ref(1)
+                const pageSize = ref(15)
+
+                // 数据存储
+                const nodes = ref([])
+                const deploys = ref([])
+                const ingresses = ref([])
+                const daemonSets = ref([])
+                const statefulSets = ref([])
+                
+                // 全量数据存储（用于命名空间过滤）
+                const fullDeploys = ref([])
+                const fullIngresses = ref([])
+                const fullDaemonSets = ref([])
+                const fullStatefulSets = ref([])
+
+                // 弹窗状态
+                const showDeployModal = ref(false)
+                const showIngressModal = ref(false)
+                const showDaemonSetModal = ref(false)
+                const showStatefulSetModal = ref(false)
+                const showResourceModal = ref(false)
+                const showConfigMapContentModal = ref(false)
+                
+                // 弹框层级，用于计算宽度
+                const modalLevel = ref(0)
+                const modalWidth = computed(() => {
+                    const width = Math.max(50, 90 - modalLevel.value * 5)
+                    return `${width}%`
+                })
+                const showPVModal = ref(false)
+                const showSettingsModal = ref(false)
+
+                // Deploy 详情
+                const deployDetailTitle = ref('')
+                const deployActiveTab = ref('yaml')
+                const deployYamlContent = ref('')
+                const deployPods = ref([])
+                const deployDescribeContent = ref('')
+                const deployConfigMaps = ref([])
+                const deploySecrets = ref([])
+                const deployPVCs = ref([])
+                const currentDeployNamespace = ref('')
+
+                // Ingress 详情
+                const ingressDetailTitle = ref('')
+                const ingressYamlContent = ref('')
+                const ingressServices = ref([])
+
+                // DaemonSet 详情
+                const daemonSetDetailTitle = ref('')
+                const daemonSetYamlContent = ref('')
+
+                // StatefulSet 详情
+                const statefulSetDetailTitle = ref('')
+                const statefulSetYamlContent = ref('')
+
+                // 资源详情
+                const resourceDetailTitle = ref('')
+                const resourceYamlContent = ref('')
+                const resourceType = ref('')
+                const configMapDataKeys = ref([])
+                const pvcVolumeName = ref('')
+                const currentResourceNamespace = ref('')
+                const configMapCurrentKey = ref('')
+                
+                // PV 详情
+                const pvDetailTitle = ref('')
+                const pvYamlContent = ref('')
+
+                // ConfigMap 内容
+                const configMapContentTitle = ref('')
+                const configMapContent = ref('')
+
+                // 设置相关
+                const settingsBaseUrl = ref('')
+                const settingsHost = ref('')
+                const hostList = ref([])
+                const newHost = ref('')
+                const newHostDesc = ref('')
+                const showHostDropdown = ref(false)
+                const baseUrl = ref('')
+                const host = ref('')
+
+                // 下拉菜单状态
+                const dropdowns = ref({
+                    configmaps: false,
+                    secrets: false,
+                    pvc: false,
+                    ingressSvc: false,
+                    formatContent: false
+                })
+
+                // 计算属性
+                const showNamespaceSelector = computed(() => {
+                    return activeMenu.value !== 'nodes'
+                })
+
+                const currentTitle = computed(() => {
+                    const item = menuItems.value.find(m => m.key === activeMenu.value)
+                    return item ? item.label : ''
+                })
+
+                const totalItems = computed(() => {
+                    switch (activeMenu.value) {
+                        case 'nodes': return nodes.value.length
+                        case 'deploy': return deploys.value.length
+                        case 'ingress': return ingresses.value.length
+                        case 'daemonsets': return daemonSets.value.length
+                        case 'statefulsets': return statefulSets.value.length
+                        default: return 0
+                    }
+                })
+
+                const totalPages = computed(() => {
+                    return Math.ceil(totalItems.value / pageSize.value)
+                })
+
+                // 生成分页按钮数组（最多显示7个页码）
+                const pageButtons = computed(() => {
+                    const pages = []
+                    const total = totalPages.value
+                    const current = currentPage.value
+                    
+                    if (total <= 7) {
+                        // 总页数少于等于7，显示所有页码
+                        for (let i = 1; i <= total; i++) {
+                            pages.push(i)
+                        }
+                    } else {
+                        // 总页数大于7，只显示当前页前后各2页
+                        if (current <= 3) {
+                            // 当前页在开头，显示前7页
+                            for (let i = 1; i <= 7; i++) {
+                                pages.push(i)
+                            }
+                            pages.push('...')
+                            pages.push(total)
+                        } else if (current >= total - 2) {
+                            // 当前页在末尾，显示后7页
+                            pages.push(1)
+                            pages.push('...')
+                            for (let i = total - 6; i <= total; i++) {
+                                pages.push(i)
+                            }
+                        } else {
+                            // 当前页在中间
+                            pages.push(1)
+                            pages.push('...')
+                            for (let i = current - 2; i <= current + 2; i++) {
+                                pages.push(i)
+                            }
+                            pages.push('...')
+                            pages.push(total)
+                        }
+                    }
+                    
+                    return pages
+                })
+
+                const paginatedNodes = computed(() => {
+                    const start = (currentPage.value - 1) * pageSize.value
+                    return nodes.value.slice(start, start + pageSize.value)
+                })
+
+                const paginatedDeploys = computed(() => {
+                    const start = (currentPage.value - 1) * pageSize.value
+                    return deploys.value.slice(start, start + pageSize.value)
+                })
+
+                const paginatedIngresses = computed(() => {
+                    const start = (currentPage.value - 1) * pageSize.value
+                    return ingresses.value.slice(start, start + pageSize.value)
+                })
+
+                const paginatedDaemonSets = computed(() => {
+                    const start = (currentPage.value - 1) * pageSize.value
+                    return daemonSets.value.slice(start, start + pageSize.value)
+                })
+
+                const paginatedStatefulSets = computed(() => {
+                    const start = (currentPage.value - 1) * pageSize.value
+                    return statefulSets.value.slice(start, start + pageSize.value)
+                })
+
+                // 方法
+                const executeCommand = async (cmd) => {
+                    if (!baseUrl.value) {
+                        alert('请先配置基础URL')
+                        return null
+                    }
+                    if (!host.value) {
+                        alert('请先配置主机名')
+                        return null
+                    }
+                    try {
+                        const response = await fetch(baseUrl.value, {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json'
+                            },
+                            body: JSON.stringify({
+                                host: host.value,
+                                cmd: cmd,
+                                comment: 'K8S show'
+                            })
+                        })
+                        
+                        if (!response.ok) {
+                            const errorText = await response.text()
+                            alert(`HTTP请求失败: \n${baseUrl.value}\n${errorText}`)
+                            return null
+                        }
+                        
+                        const result = await response.json()
+                        
+                        if (result && result.status !== 1) {
+                            if (result.msg) {
+                                alert(result.msg)
+                            } else {
+                                alert(`请求失败: ${JSON.stringify(result)}`)
+                            }
+                            return null
+                        }
+                        
+                        return result
+                    } catch (error) {
+                        alert(`网络错误: ${error.message}`)
+                        return null
+                    }
+                }
+
+                const loadNamespaces = async () => {
+                    const result = await executeCommand('kubectl get ns')
+                    if (result && result.status === 1 && result.data.exit_code === '0') {
+                        const lines = result.data.stdout.trim().split('\n')
+                        const activeNamespaces = []
+                        for (let i = 1; i < lines.length; i++) {
+                            const parts = lines[i].split(/\s+/)
+                            if (parts[1] === 'Active') {
+                                activeNamespaces.push(parts[0])
+                            }
+                        }
+                        namespaces.value = activeNamespaces.sort()
+                    }
+                }
+
+                const loadNodes = async () => {
+                    loading.value = true
+                    const result = await executeCommand('kubectl get nodes')
+                    if (result && result.status === 1 && result.data.exit_code === '0') {
+                        const lines = result.data.stdout.trim().split('\n')
+                        const nodeList = []
+                        for (let i = 1; i < lines.length; i++) {
+                            const parts = lines[i].split(/\s+/)
+                            nodeList.push({
+                                name: parts[0],
+                                status: parts[1],
+                                roles: parts[2],
+                                age: parts[3],
+                                version: parts[4]
+                            })
+                        }
+                        nodes.value = nodeList
+                    }
+                    loading.value = false
+                }
+
+                const loadDeploys = async () => {
+                    loading.value = true
+                    const result = await executeCommand('kubectl get deploy -A')
+                    if (result && result.status === 1 && result.data.exit_code === '0') {
+                        const lines = result.data.stdout.trim().split('\n')
+                        const deployList = []
+                        for (let i = 1; i < lines.length; i++) {
+                            const parts = lines[i].split(/\s+/)
+                            const readyStr = parts[2]
+                            let [ready, total] = readyStr.split('/')
+                            ready = Number(ready)
+                            total = Number(total)
+                            deployList.push({
+                                namespace: parts[0],
+                                name: parts[1],
+                                ready: readyStr,
+                                readyPercent: total ? (ready / total) * 100 : 0,
+                                upToDate: parts[3],
+                                available: parts[4],
+                                age: parts[5]
+                            })
+                        }
+                        fullDeploys.value = deployList
+                        // 根据当前命名空间过滤
+                        filterByNamespace()
+                    }
+                    loading.value = false
+                }
+
+                const loadIngresses = async () => {
+                    loading.value = true
+                    const result = await executeCommand('kubectl get ingress -A')
+                    if (result && result.status === 1 && result.data.exit_code === '0') {
+                        const lines = result.data.stdout.trim().split('\n')
+                        const ingressList = []
+                        for (let i = 1; i < lines.length; i++) {
+                            const parts = lines[i].split(/\s+/)
+                            let namespace = parts[0]
+                            let name = parts[1]
+                            let ingressClass = ''
+                            let hosts = parts[parts.length - 3]
+                            let address = ''
+                            let ports = parts[parts.length - 2]
+                            let age = parts[parts.length - 1]
+                            
+                            ingressList.push({
+                                namespace,
+                                name,
+                                class: ingressClass,
+                                hosts,
+                                address,
+                                ports,
+                                age
+                            })
+                        }
+                        fullIngresses.value = ingressList
+                        // 根据当前命名空间过滤
+                        filterByNamespace()
+                    }
+                    loading.value = false
+                }
+
+                const loadDaemonSets = async () => {
+                    loading.value = true
+                    const result = await executeCommand('kubectl get daemonsets -A')
+                    if (result && result.status === 1 && result.data.exit_code === '0') {
+                        const lines = result.data.stdout.trim().split('\n')
+                        const dsList = []
+                        for (let i = 1; i < lines.length; i++) {
+                            const parts = lines[i].split(/\s+/)
+                            dsList.push({
+                                namespace: parts[0],
+                                name: parts[1],
+                                desired: parts[2],
+                                current: parts[3],
+                                ready: parts[4],
+                                upToDate: parts[5],
+                                available: parts[6],
+                                age: parts[7]
+                            })
+                        }
+                        fullDaemonSets.value = dsList
+                        // 根据当前命名空间过滤
+                        filterByNamespace()
+                    }
+                    loading.value = false
+                }
+
+                const loadStatefulSets = async () => {
+                    loading.value = true
+                    const result = await executeCommand('kubectl get statefulsets -A')
+                    if (result && result.status === 1 && result.data.exit_code === '0') {
+                        const lines = result.data.stdout.trim().split('\n')
+                        const ssList = []
+                        for (let i = 1; i < lines.length; i++) {
+                            const parts = lines[i].split(/\s+/)
+                            ssList.push({
+                                namespace: parts[0],
+                                name: parts[1],
+                                ready: parts[2],
+                                age: parts[3]
+                            })
+                        }
+                        fullStatefulSets.value = ssList
+                        // 根据当前命名空间过滤
+                        filterByNamespace()
+                    }
+                    loading.value = false
+                }
+
+                const switchMenu = async (menuKey) => {
+                    activeMenu.value = menuKey
+                    currentPage.value = 1
+                    
+                    switch (menuKey) {
+                        case 'nodes':
+                            if (nodes.value.length === 0) await loadNodes()
+                            break
+                        case 'deploy':
+                            if (fullDeploys.value.length === 0) await loadDeploys()
+                            else filterByNamespace()
+                            break
+                        case 'ingress':
+                            if (fullIngresses.value.length === 0) await loadIngresses()
+                            else filterByNamespace()
+                            break
+                        case 'daemonsets':
+                            if (fullDaemonSets.value.length === 0) await loadDaemonSets()
+                            else filterByNamespace()
+                            break
+                        case 'statefulsets':
+                            if (fullStatefulSets.value.length === 0) await loadStatefulSets()
+                            else filterByNamespace()
+                            break
+                    }
+                }
+
+                const filterByNamespace = () => {
+                    const ns = selectedNamespace.value
+                    if (ns === 'ALL') {
+                        deploys.value = fullDeploys.value
+                        ingresses.value = fullIngresses.value
+                        daemonSets.value = fullDaemonSets.value
+                        statefulSets.value = fullStatefulSets.value
+                    } else {
+                        deploys.value = fullDeploys.value.filter(d => d.namespace === ns)
+                        ingresses.value = fullIngresses.value.filter(i => i.namespace === ns)
+                        daemonSets.value = fullDaemonSets.value.filter(ds => ds.namespace === ns)
+                        statefulSets.value = fullStatefulSets.value.filter(ss => ss.namespace === ns)
+                    }
+                }
+
+                const handleNamespaceChange = () => {
+                    currentPage.value = 1
+                    filterByNamespace()
+                }
+
+                const prevPage = () => {
+                    if (currentPage.value > 1) {
+                        currentPage.value--
+                    }
+                }
+
+                const nextPage = () => {
+                    if (currentPage.value < totalPages.value) {
+                        currentPage.value++
+                    }
+                }
+
+                const goToPage = (page) => {
+                    currentPage.value = page
+                }
+
+                const toggleSidebar = () => {
+                    sidebarCollapsed.value = !sidebarCollapsed.value
+                }
+
+                const handlePageSizeChange = () => {
+                    currentPage.value = 1
+                }
+
+                // Deploy 详情
+                const showDeployDetail = async (deploy) => {
+                    deployDetailTitle.value = `deploy/${deploy.name} -n ${deploy.namespace}`
+                    currentDeployNamespace.value = deploy.namespace
+                    deployActiveTab.value = 'yaml'
+                    modalLevel.value++
+                    showDeployModal.value = true
+                    
+                    // 加载 YAML
+                    const result = await executeCommand(`kubectl get deploy ${deploy.name} -n ${deploy.namespace} -o yaml`)
+                    if (result && result.status === 1 && result.data.exit_code === '0') {
+                        deployYamlContent.value = result.data.stdout
+                        // 解析 volumes
+                        parseVolumes(result.data.stdout)
+                    }
+                }
+
+                const parseVolumes = (yamlStr) => {
+                    try {
+                        const yamlData = jsyaml.load(yamlStr)
+                        deployConfigMaps.value = []
+                        deploySecrets.value = []
+                        deployPVCs.value = []
+                        
+                        if (yamlData?.spec?.template?.spec?.volumes) {
+                            yamlData.spec.template.spec.volumes.forEach(volume => {
+                                if (volume.configMap && volume.configMap.name) {
+                                    deployConfigMaps.value.push({ 
+                                        name: volume.name, 
+                                        refName: volume.configMap.name 
+                                    })
+                                }
+                                if (volume.secret && volume.secret.secretName) {
+                                    deploySecrets.value.push({ 
+                                        name: volume.name, 
+                                        refName: volume.secret.secretName 
+                                    })
+                                }
+                                if (volume.persistentVolumeClaim && volume.persistentVolumeClaim.claimName) {
+                                    deployPVCs.value.push({ 
+                                        name: volume.name, 
+                                        refName: volume.persistentVolumeClaim.claimName 
+                                    })
+                                }
+                            })
+                        }
+                    } catch (e) {
+                        console.error('解析 YAML 失败:', e)
+                    }
+                }
+
+                const closeDeployModal = () => {
+                    showDeployModal.value = false
+                    modalLevel.value = Math.max(0, modalLevel.value - 1)
+                    closeAllDropdowns()
+                }
+
+                // 切换 Deploy tab
+                const switchDeployTab = async (tab) => {
+                    deployActiveTab.value = tab
+                    closeAllDropdowns()
+                    
+                    if (tab === 'pods') {
+                        const result = await executeCommand(`kubectl get pods -n ${currentDeployNamespace.value} -l app=${deployDetailTitle.value.split('/')[1]} -o wide`)
+                        if (result && result.status === 1 && result.data.exit_code === '0') {
+                            const lines = result.data.stdout.trim().split('\n')
+                            const podList = []
+                            for (let i = 1; i < lines.length; i++) {
+                                const parts = lines[i].split(/\s+/)
+                                podList.push({
+                                    name: parts[0],
+                                    ready: parts[1],
+                                    status: parts[2],
+                                    restarts: parts[3],
+                                    age: parts[4],
+                                    ip: parts[5],
+                                    node: parts[6],
+                                    nominated: parts[7],
+                                    readiness: parts[8]
+                                })
+                            }
+                            deployPods.value = podList
+                        }
+                    } else if (tab === 'describe') {
+                        const result = await executeCommand(`kubectl describe deploy ${deployDetailTitle.value.split('/')[1]} -n ${currentDeployNamespace.value}`)
+                        if (result && result.status === 1 && result.data.exit_code === '0') {
+                            deployDescribeContent.value = result.data.stdout
+                        }
+                    }
+                }
+
+                // Ingress 详情
+                const showIngressDetail = async (ingress) => {
+                    ingressDetailTitle.value = `ingress/${ingress.name} -n ${ingress.namespace}`
+                    modalLevel.value++
+                    showIngressModal.value = true
+                    
+                    const result = await executeCommand(`kubectl get ingress ${ingress.name} -n ${ingress.namespace} -o yaml`)
+                    if (result && result.status === 1 && result.data.exit_code === '0') {
+                        ingressYamlContent.value = result.data.stdout
+                        parseIngressServices(result.data.stdout, ingress.namespace)
+                    }
+                }
+
+                const parseIngressServices = (yamlStr, namespace) => {
+                    try {
+                        const yamlData = jsyaml.load(yamlStr)
+                        ingressServices.value = []
+                        
+                        // 处理 rules 中的 backend
+                        if (yamlData?.spec?.rules) {
+                            yamlData.spec.rules.forEach(rule => {
+                                if (rule.http?.paths) {
+                                    rule.http.paths.forEach(path => {
+                                        // 新格式: path.backend.service.name
+                                        if (path.backend?.service?.name) {
+                                            ingressServices.value.push({
+                                                name: path.backend.service.name,
+                                                namespace: namespace
+                                            })
+                                        }
+                                        // 旧格式: path.backend.serviceName
+                                        else if (path.backend?.serviceName) {
+                                            ingressServices.value.push({
+                                                name: path.backend.serviceName,
+                                                namespace: namespace
+                                            })
+                                        }
+                                    })
+                                }
+                            })
+                        }
+                        
+                        // 处理默认 backend（不在 rules 中的）
+                        if (yamlData?.spec?.backend) {
+                            // 新格式: spec.backend.service.name
+                            if (yamlData.spec.backend?.service?.name) {
+                                ingressServices.value.push({
+                                    name: yamlData.spec.backend.service.name,
+                                    namespace: namespace
+                                })
+                            }
+                            // 旧格式: spec.backend.serviceName
+                            else if (yamlData.spec.backend?.serviceName) {
+                                ingressServices.value.push({
+                                    name: yamlData.spec.backend.serviceName,
+                                    namespace: namespace
+                                })
+                            }
+                        }
+                        
+                        // 去重
+                        const uniqueServices = []
+                        const seen = new Set()
+                        ingressServices.value.forEach(svc => {
+                            const key = `${svc.namespace}/${svc.name}`
+                            if (!seen.has(key)) {
+                                seen.add(key)
+                                uniqueServices.push(svc)
+                            }
+                        })
+                        ingressServices.value = uniqueServices
+                    } catch (e) {
+                        console.error('解析 Ingress YAML 失败:', e)
+                    }
+                }
+
+                const closeIngressModal = () => {
+                    showIngressModal.value = false
+                    modalLevel.value = Math.max(0, modalLevel.value - 1)
+                    closeAllDropdowns()
+                }
+
+                // DaemonSet 详情
+                const showDaemonSetDetail = async (ds) => {
+                    daemonSetDetailTitle.value = `daemonset/${ds.name} -n ${ds.namespace}`
+                    currentDeployNamespace.value = ds.namespace
+                    modalLevel.value++
+                    showDaemonSetModal.value = true
+                    
+                    const result = await executeCommand(`kubectl get daemonsets ${ds.name} -n ${ds.namespace} -o yaml`)
+                    if (result && result.status === 1 && result.data.exit_code === '0') {
+                        daemonSetYamlContent.value = result.data.stdout
+                        parseVolumes(result.data.stdout)
+                    }
+                }
+
+                const closeDaemonSetModal = () => {
+                    showDaemonSetModal.value = false
+                    modalLevel.value = Math.max(0, modalLevel.value - 1)
+                }
+
+                // StatefulSet 详情
+                const showStatefulSetDetail = async (ss) => {
+                    statefulSetDetailTitle.value = `statefulset/${ss.name} -n ${ss.namespace}`
+                    currentDeployNamespace.value = ss.namespace
+                    modalLevel.value++
+                    showStatefulSetModal.value = true
+                    
+                    const result = await executeCommand(`kubectl get statefulsets ${ss.name} -n ${ss.namespace} -o yaml`)
+                    if (result && result.status === 1 && result.data.exit_code === '0') {
+                        statefulSetYamlContent.value = result.data.stdout
+                        parseVolumes(result.data.stdout)
+                    }
+                }
+
+                const closeStatefulSetModal = () => {
+                    showStatefulSetModal.value = false
+                    modalLevel.value = Math.max(0, modalLevel.value - 1)
+                }
+
+                // 资源详情
+                const showResourceYaml = async (type, name, namespace = currentDeployNamespace.value) => {
+                    closeAllDropdowns()
+                    resourceType.value = type
+                    currentResourceNamespace.value = namespace
+                    
+                    const typeMap = {
+                        configmap: 'ConfigMap',
+                        secret: 'Secret',
+                        pvc: 'PersistentVolumeClaim',
+                        service: 'Service'
+                    }
+                    
+                    resourceDetailTitle.value = `${type}/${name} -n ${namespace}`
+                    showResourceModal.value = true
+                    
+                    const result = await executeCommand(`kubectl get ${type} ${name} -n ${namespace} -o yaml`)
+                    if (result && result.status === 1 && result.data.exit_code === '0') {
+                        resourceYamlContent.value = result.data.stdout
+                        
+                        // 如果是 ConfigMap，提取 data 字段的 key
+                        if (type === 'configmap') {
+                            try {
+                                const yamlData = jsyaml.load(result.data.stdout)
+                                configMapDataKeys.value = yamlData?.data ? Object.keys(yamlData.data) : []
+                            } catch (e) {
+                                configMapDataKeys.value = []
+                            }
+                        } else {
+                            configMapDataKeys.value = []
+                        }
+                        
+                        // 如果是 PVC，提取 volumeName
+                        if (type === 'pvc') {
+                            try {
+                                const yamlData = jsyaml.load(result.data.stdout)
+                                pvcVolumeName.value = yamlData?.spec?.volumeName || ''
+                            } catch (e) {
+                                pvcVolumeName.value = ''
+                            }
+                        } else {
+                            pvcVolumeName.value = ''
+                        }
+                    }
+                }
+
+                const closeResourceModal = () => {
+                    showResourceModal.value = false
+                    modalLevel.value = Math.max(0, modalLevel.value - 1)
+                    closeAllDropdowns()
+                }
+
+                // ConfigMap 内容
+                const showConfigMapContent = async (key) => {
+                    closeAllDropdowns()
+                    configMapCurrentKey.value = key
+                    
+                    try {
+                        const yamlData = jsyaml.load(resourceYamlContent.value)
+                        configMapContent.value = yamlData?.data?.[key] || ''
+                    } catch (e) {
+                        configMapContent.value = ''
+                    }
+                    
+                    showConfigMapContentModal.value = true
+                }
+
+                const closeConfigMapContentModal = () => {
+                    showConfigMapContentModal.value = false
+                    modalLevel.value = Math.max(0, modalLevel.value - 1)
+                }
+
+                // PV 详情
+                const showPVYaml = async (volumeName) => {
+                    closeAllDropdowns()
+                    pvDetailTitle.value = `pv/${volumeName}`
+                    
+                    const result = await executeCommand(`kubectl get pv ${volumeName} -o yaml`)
+                    if (result && result.status === 1 && result.data.exit_code === '0') {
+                        pvYamlContent.value = result.data.stdout
+                        showPVModal.value = true
+                    }
+                }
+                
+                const closePVModal = () => {
+                    showPVModal.value = false
+                    modalLevel.value = Math.max(0, modalLevel.value - 1)
+                }
+
+                // 设置相关
+                const openSettingsModal = () => {
+                    settingsBaseUrl.value = baseUrl.value
+                    settingsHost.value = host.value
+                    showHostDropdown.value = false
+                    showSettingsModal.value = true
+                }
+
+                const closeSettingsModal = () => {
+                    settingsBaseUrl.value = baseUrl.value
+                    settingsHost.value = host.value
+                    showSettingsModal.value = false
+                    showHostDropdown.value = false
+                }
+
+                const confirmSettings = async () => {
+                    // 检查是否填写了有效的 baseUrl 和 host
+                    if (!settingsBaseUrl.value || !settingsBaseUrl.value.trim()) {
+                        alert('请输入有效的 baseUrl')
+                        return
+                    }
+                    if (!settingsHost.value || !settingsHost.value.trim()) {
+                        alert('请选择或输入有效的 host')
+                        return
+                    }
+                    
+                    // 保存设置
+                    baseUrl.value = settingsBaseUrl.value.trim()
+                    host.value = settingsHost.value.trim()
+                    localStorage.setItem('k8s_base_url', baseUrl.value)
+                    localStorage.setItem('k8s_host', host.value)
+                    
+                    // 确保 host 在列表中
+                    if (!hostList.value.some(h => h.name === host.value)) {
+                        hostList.value.push({ name: host.value, description: '' })
+                        localStorage.setItem('k8s_host_list', JSON.stringify(hostList.value))
+                    }
+                    
+                    // 关闭弹窗并重新加载网页
+                    showSettingsModal.value = false
+                    location.reload()
+                }
+
+                const addHost = () => {
+                    if (newHost.value && !hostList.value.some(h => h.name === newHost.value)) {
+                        hostList.value.push({
+                            name: newHost.value,
+                            description: newHostDesc.value || ''
+                        })
+                        localStorage.setItem('k8s_host_list', JSON.stringify(hostList.value))
+                        newHost.value = ''
+                        newHostDesc.value = ''
+                    }
+                }
+
+                const deleteHost = () => {
+                    if (settingsHost.value) {
+                        hostList.value = hostList.value.filter(h => h.name !== settingsHost.value)
+                        localStorage.setItem('k8s_host_list', JSON.stringify(hostList.value))
+                        settingsHost.value = ''
+                    }
+                }
+
+                const toggleHostDropdown = (e) => {
+                    e.stopPropagation()
+                    showHostDropdown.value = !showHostDropdown.value
+                }
+
+                const selectHost = (e, name) => {
+                    e.stopPropagation()
+                    settingsHost.value = name
+                    showHostDropdown.value = false
+                }
+
+                const closeHostDropdown = () => {
+                    showHostDropdown.value = false
+                }
+
+                const getHostDesc = (hostName) => {
+                    const item = hostList.value.find(h => h.name === hostName)
+                    return item ? item.description || '无描述' : '无描述'
+                }
+
+                // 下拉菜单
+                const toggleDropdown = (name) => {
+                    // 先关闭所有其他下拉菜单
+                    Object.keys(dropdowns.value).forEach(key => {
+                        if (key !== name) {
+                            dropdowns.value[key] = false
+                        }
+                    })
+                    dropdowns.value[name] = !dropdowns.value[name]
+                }
+
+                const closeAllDropdowns = () => {
+                    Object.keys(dropdowns.value).forEach(key => {
+                        dropdowns.value[key] = false
+                    })
+                }
+
+                const copyToClipboard = async (text) => {
+                    try {
+                        if (navigator.clipboard) {
+                            await navigator.clipboard.writeText(text)
+                            alert('复制成功')
+                        } else {
+                            const textarea = document.createElement('textarea')
+                            textarea.value = text
+                            textarea.style.position = 'fixed'
+                            textarea.style.left = '-9999px'
+                            document.body.appendChild(textarea)
+                            textarea.select()
+                            document.execCommand('copy')
+                            document.body.removeChild(textarea)
+                            alert('复制成功')
+                        }
+                    } catch (err) {
+                        console.error('复制失败:', err)
+                        alert('复制失败')
+                    }
+                }
+
+                // 监听 Deploy tab 变化
+                const deployActiveTabWatcher = computed(() => deployActiveTab.value)
+                watch(deployActiveTabWatcher, (newTab) => {
+                    switchDeployTab(newTab)
+                })
+
+                // 初始化
+                onMounted(async () => {
+                    // 从 localStorage 读取设置
+                    const savedBaseUrl = localStorage.getItem('k8s_base_url')
+                    const savedHost = localStorage.getItem('k8s_host')
+                    const savedHostList = localStorage.getItem('k8s_host_list')
+
+                    // 使用保存的值（如果有效）
+                    const validBaseUrl = savedBaseUrl && savedBaseUrl.trim() ? savedBaseUrl.trim() : ''
+                    const validHost = savedHost && savedHost.trim() ? savedHost.trim() : ''
+                    
+                    baseUrl.value = validBaseUrl
+                    host.value = validHost
+                    
+                    if (savedHostList) {
+                        const parsedList = JSON.parse(savedHostList)
+                        // 兼容旧格式（字符串数组）和新格式（对象数组）
+                        if (parsedList.length > 0 && typeof parsedList[0] === 'string') {
+                            hostList.value = parsedList.map(h => ({ name: h, description: '' }))
+                        } else {
+                            hostList.value = parsedList
+                        }
+                    } else {
+                        hostList.value = []
+                    }
+
+                    // 如果 baseUrl 或 host 为空，弹出设置弹窗
+                    if (!baseUrl.value || !host.value) {
+                        settingsBaseUrl.value = baseUrl.value || ''
+                        settingsHost.value = host.value || ''
+                        showSettingsModal.value = true
+                    } else {
+                        // 确保当前 host 在列表中
+                        if (!hostList.value.some(h => h.name === host.value)) {
+                            hostList.value.push({ name: host.value, description: '' })
+                            localStorage.setItem('k8s_host_list', JSON.stringify(hostList.value))
+                        }
+                        // 正常加载数据
+                        await loadNamespaces()
+                        await loadNodes()
+                    }
+                })
+
+                // 监听设置变化并保存到 localStorage（已移除，改为仅在确认时保存）
+
+                return {
+                    // 状态
+                    menuItems,
+                    activeMenu,
+                    sidebarCollapsed,
+                    loading,
+                    namespaces,
+                    selectedNamespace,
+                    currentPage,
+                    pageSize,
+                    nodes,
+                    deploys,
+                    ingresses,
+                    daemonSets,
+                    statefulSets,
+                    showDeployModal,
+                    showIngressModal,
+                    showDaemonSetModal,
+                    showStatefulSetModal,
+                    showResourceModal,
+                    showConfigMapContentModal,
+                    showPVModal,
+                    showSettingsModal,
+                    modalWidth,
+                    settingsBaseUrl,
+                    settingsHost,
+                    hostList,
+                    newHost,
+                    newHostDesc,
+                    showHostDropdown,
+                    baseUrl,
+                    host,
+                    pvDetailTitle,
+                    pvYamlContent,
+                    deployDetailTitle,
+                    deployActiveTab,
+                    deployYamlContent,
+                    deployPods,
+                    deployDescribeContent,
+                    deployConfigMaps,
+                    deploySecrets,
+                    deployPVCs,
+                    ingressDetailTitle,
+                    ingressYamlContent,
+                    ingressServices,
+                    daemonSetDetailTitle,
+                    daemonSetYamlContent,
+                    statefulSetDetailTitle,
+                    statefulSetYamlContent,
+                    resourceDetailTitle,
+                    resourceYamlContent,
+                    resourceType,
+                    configMapDataKeys,
+                    pvcVolumeName,
+                    configMapCurrentKey,
+                    configMapContentTitle,
+                    configMapContent,
+                    dropdowns,
+                    // 计算属性
+                    showNamespaceSelector,
+                    currentTitle,
+                    totalItems,
+                    totalPages,
+                    pageButtons,
+                    paginatedNodes,
+                    paginatedDeploys,
+                    paginatedIngresses,
+                    paginatedDaemonSets,
+                    paginatedStatefulSets,
+                    // 方法
+                    switchMenu,
+                    handleNamespaceChange,
+                    prevPage,
+                    nextPage,
+                    goToPage,
+                    toggleSidebar,
+                    handlePageSizeChange,
+                    showDeployDetail,
+                    closeDeployModal,
+                    showIngressDetail,
+                    closeIngressModal,
+                    showDaemonSetDetail,
+                    closeDaemonSetModal,
+                    showStatefulSetDetail,
+                    closeStatefulSetModal,
+                    showResourceYaml,
+                    closeResourceModal,
+                    showConfigMapContent,
+                    closeConfigMapContentModal,
+                    showPVYaml,
+                    closePVModal,
+                    openSettingsModal,
+                    closeSettingsModal,
+                    confirmSettings,
+                    addHost,
+                    deleteHost,
+                    toggleHostDropdown,
+                    selectHost,
+                    closeHostDropdown,
+                    getHostDesc,
+                    toggleDropdown,
+                    closeAllDropdowns,
+                    copyToClipboard
+                }
+            }
+        }).mount('#app')
+    </script>
+</body>
+</html>
