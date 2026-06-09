@@ -246,6 +246,10 @@
         }
 
         .ready-column {
+            /* 移除 flex，避免破坏表格布局 */
+        }
+
+        .ready-content {
             display: flex;
             align-items: center;
             gap: 8px;
@@ -290,6 +294,44 @@
 
         .more-btn:hover {
             background-color: #0284c7;
+        }
+
+        .toast-message {
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            padding: 12px 24px;
+            border-radius: 4px;
+            color: white;
+            font-size: 14px;
+            font-weight: 500;
+            z-index: 9999;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+            animation: slideDown 0.3s ease-out;
+        }
+
+        .toast-message.success {
+            background-color: #22c55e;
+        }
+
+        .toast-message.error {
+            background-color: #ef4444;
+        }
+
+        .toast-message.hidden {
+            display: none;
+        }
+
+        @keyframes slideDown {
+            from {
+                opacity: 0;
+                transform: translateX(-50%) translateY(-20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateX(-50%) translateY(0);
+            }
         }
 
         .modal-overlay {
@@ -528,6 +570,11 @@
 
         .resource-modal-content {
             width: 85%;
+            height: 100%;
+        }
+
+        .service-modal-content {
+            width: 90%;
             height: 100%;
         }
 
@@ -864,6 +911,11 @@
 </head>
 <body>
     <div id="app">
+        <!-- 消息提示 -->
+        <div :class="['toast-message', messageType, { hidden: !showMessage }]">
+            {{ messageText }}
+        </div>
+
         <!-- 侧边栏 -->
         <div :class="['sidebar', { collapsed: sidebarCollapsed }]">
             <div class="sidebar-header" @click="toggleSidebar">
@@ -921,6 +973,7 @@
                                 <th>ROLES</th>
                                 <th>AGE</th>
                                 <th>VERSION</th>
+                                <th>操作</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -930,6 +983,7 @@
                                 <td>{{ node.roles }}</td>
                                 <td>{{ node.age }}</td>
                                 <td>{{ node.version }}</td>
+                                <td><button class="more-btn" @click="showNodeDetail(node)">更多</button></td>
                             </tr>
                         </tbody>
                     </table>
@@ -977,9 +1031,11 @@
                                 <td>{{ deploy.namespace }}</td>
                                 <td>{{ deploy.name }}</td>
                                 <td class="ready-column">
-                                    <span>{{ deploy.ready }}</span>
-                                    <div class="progress-bar">
-                                        <div class="progress-fill" :style="{ width: deploy.readyPercent + '%' }"></div>
+                                    <div class="ready-content">
+                                        <span>{{ deploy.ready }}</span>
+                                        <div class="progress-bar">
+                                            <div class="progress-fill" :style="{ width: deploy.readyPercent + '%' }"></div>
+                                        </div>
                                     </div>
                                 </td>
                                 <td>{{ deploy.upToDate }}</td>
@@ -1044,6 +1100,61 @@
                     </table>
                     <div v-if="ingresses.length > 0" class="pagination">
                         <span class="pagination-info">共 {{ ingresses.length }} 条记录</span>
+                        <span class="page-size-selector">
+                            每页
+                            <select v-model="pageSize" @change="handlePageSizeChange">
+                                <option :value="10">10</option>
+                                <option :value="15">15</option>
+                                <option :value="50">50</option>
+                                <option :value="100">100</option>
+                                <option :value="500">500</option>
+                            </select>
+                            条
+                        </span>
+                        <button @click="prevPage" :disabled="currentPage === 1">上一页</button>
+                        <button 
+                            v-for="(page, index) in pageButtons" 
+                            :key="index" 
+                            :class="{ active: currentPage === page, disabled: page === '...' }"
+                            :disabled="page === '...'"
+                            @click="goToPage(page)"
+                        >{{ page }}</button>
+                        <button @click="nextPage" :disabled="currentPage === totalPages">下一页</button>
+                    </div>
+                </div>
+
+                <!-- Services 表格 -->
+                <div v-else-if="activeMenu === 'services'" class="table-container">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>NAMESPACE</th>
+                                <th>NAME</th>
+                                <th>TYPE</th>
+                                <th>CLUSTER-IP</th>
+                                <th>EXTERNAL-IP</th>
+                                <th>PORT(S)</th>
+                                <th>SELECTOR</th>
+                                <th>AGE</th>
+                                <th>操作</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr v-for="svc in paginatedServices" :key="svc.name">
+                                <td>{{ svc.namespace }}</td>
+                                <td>{{ svc.name }}</td>
+                                <td>{{ svc.type }}</td>
+                                <td>{{ svc.clusterIP }}</td>
+                                <td>{{ svc.externalIP }}</td>
+                                <td>{{ svc.port }}</td>
+                                <td>{{ svc.selector }}</td>
+                                <td>{{ svc.age }}</td>
+                                <td><button class="more-btn" @click="showServiceDetail(svc)">更多</button></td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    <div v-if="services.length > 0" class="pagination">
+                        <span class="pagination-info">共 {{ services.length }} 条记录</span>
                         <span class="page-size-selector">
                             每页
                             <select v-model="pageSize" @change="handlePageSizeChange">
@@ -1209,6 +1320,7 @@
                                         <th>NODE</th>
                                         <th>NOMINATED</th>
                                         <th>READINESS </th>
+                                        <th>操作</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -1222,6 +1334,7 @@
                                         <td>{{ pod.node }}</td>
                                         <td>{{ pod.nominated }}</td>
                                         <td>{{ pod.readiness }}</td>
+                                        <td><button class="more-btn" @click="showPodDetail(pod)">更多</button></td>
                                     </tr>
                                 </tbody>
                             </table>
@@ -1298,13 +1411,64 @@
                     <h2>{{ daemonSetDetailTitle }}</h2>
                     <button class="modal-close" @click="closeDaemonSetModal">×</button>
                 </div>
-                <div class="modal-body">
-                    <div class="pre-wrapper">
-                        <button class="copy-btn" @click="copyToClipboard(daemonSetYamlContent)">复制</button>
-                        <pre class="yaml-content">{{ daemonSetYamlContent }}</pre>
-                    </div>
+                <div class="modal-tabs">
+                    <button :class="{ active: daemonSetActiveTab === 'yaml' }" class="tab-btn" @click="daemonSetActiveTab = 'yaml'">YAML</button>
+                    <button :class="{ active: daemonSetActiveTab === 'pods' }" class="tab-btn" @click="switchDaemonSetTab('pods')">Pods</button>
+                    <button :class="{ active: daemonSetActiveTab === 'describe' }" class="tab-btn" @click="switchDaemonSetTab('describe')">Describe</button>
                 </div>
-                <div class="modal-footer">
+                <div class="modal-body">
+                    <!-- YAML 内容 -->
+                    <template v-if="daemonSetActiveTab === 'yaml'">
+                        <div class="pre-wrapper">
+                            <button class="copy-btn" @click="copyToClipboard(daemonSetYamlContent)">复制</button>
+                            <pre class="yaml-content">{{ daemonSetYamlContent }}</pre>
+                        </div>
+                    </template>
+                    <!-- Pods 内容 -->
+                    <template v-else-if="daemonSetActiveTab === 'pods'">
+                        <div class="table-container">
+                            <table class="data-table">
+                                <thead>
+                                    <tr>
+                                        <th>NAME</th>
+                                        <th>READY</th>
+                                        <th>STATUS</th>
+                                        <th>RESTARTS</th>
+                                        <th>AGE</th>
+                                        <th>IP</th>
+                                        <th>NODE</th>
+                                        <th>NOMINATED</th>
+                                        <th>READINESS </th>
+                                        <th>操作</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr v-for="pod in daemonSetPods" :key="pod.name">
+                                        <td>{{ pod.name }}</td>
+                                        <td>{{ pod.ready }}</td>
+                                        <td>{{ pod.status }}</td>
+                                        <td>{{ pod.restarts }}</td>
+                                        <td>{{ pod.age }}</td>
+                                        <td>{{ pod.ip }}</td>
+                                        <td>{{ pod.node }}</td>
+                                        <td>{{ pod.nominated }}</td>
+                                        <td>{{ pod.readiness }}</td>
+                                        <td><button class="more-btn" @click="showPodDetail(pod)">更多</button></td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </template>
+                    <!-- Describe 内容 -->
+                    <template v-else-if="daemonSetActiveTab === 'describe'">
+                        <div class="pre-wrapper">
+                            <button class="copy-btn" @click="copyToClipboard(daemonSetDescribeContent)">复制</button>
+                            <pre class="describe-content">{{ daemonSetDescribeContent }}</pre>
+                        </div>
+                    </template>
+                </div>
+                <!-- YAML 按钮区域 -->
+                <div v-if="daemonSetActiveTab === 'yaml'" class="modal-footer">
                     <div class="yaml-actions">
                         <div class="action-btn-wrapper">
                             <button class="action-btn" @click="toggleDropdown('configmaps')">ConfigMaps</button>
@@ -1339,13 +1503,64 @@
                     <h2>{{ statefulSetDetailTitle }}</h2>
                     <button class="modal-close" @click="closeStatefulSetModal">×</button>
                 </div>
-                <div class="modal-body">
-                    <div class="pre-wrapper">
-                        <button class="copy-btn" @click="copyToClipboard(statefulSetYamlContent)">复制</button>
-                        <pre class="yaml-content">{{ statefulSetYamlContent }}</pre>
-                    </div>
+                <div class="modal-tabs">
+                    <button :class="{ active: statefulSetActiveTab === 'yaml' }" class="tab-btn" @click="statefulSetActiveTab = 'yaml'">YAML</button>
+                    <button :class="{ active: statefulSetActiveTab === 'pods' }" class="tab-btn" @click="switchStatefulSetTab('pods')">Pods</button>
+                    <button :class="{ active: statefulSetActiveTab === 'describe' }" class="tab-btn" @click="switchStatefulSetTab('describe')">Describe</button>
                 </div>
-                <div class="modal-footer">
+                <div class="modal-body">
+                    <!-- YAML 内容 -->
+                    <template v-if="statefulSetActiveTab === 'yaml'">
+                        <div class="pre-wrapper">
+                            <button class="copy-btn" @click="copyToClipboard(statefulSetYamlContent)">复制</button>
+                            <pre class="yaml-content">{{ statefulSetYamlContent }}</pre>
+                        </div>
+                    </template>
+                    <!-- Pods 内容 -->
+                    <template v-else-if="statefulSetActiveTab === 'pods'">
+                        <div class="table-container">
+                            <table class="data-table">
+                                <thead>
+                                    <tr>
+                                        <th>NAME</th>
+                                        <th>READY</th>
+                                        <th>STATUS</th>
+                                        <th>RESTARTS</th>
+                                        <th>AGE</th>
+                                        <th>IP</th>
+                                        <th>NODE</th>
+                                        <th>NOMINATED</th>
+                                        <th>READINESS </th>
+                                        <th>操作</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr v-for="pod in statefulSetPods" :key="pod.name">
+                                        <td>{{ pod.name }}</td>
+                                        <td>{{ pod.ready }}</td>
+                                        <td>{{ pod.status }}</td>
+                                        <td>{{ pod.restarts }}</td>
+                                        <td>{{ pod.age }}</td>
+                                        <td>{{ pod.ip }}</td>
+                                        <td>{{ pod.node }}</td>
+                                        <td>{{ pod.nominated }}</td>
+                                        <td>{{ pod.readiness }}</td>
+                                        <td><button class="more-btn" @click="showPodDetail(pod)">更多</button></td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </template>
+                    <!-- Describe 内容 -->
+                    <template v-else-if="statefulSetActiveTab === 'describe'">
+                        <div class="pre-wrapper">
+                            <button class="copy-btn" @click="copyToClipboard(statefulSetDescribeContent)">复制</button>
+                            <pre class="describe-content">{{ statefulSetDescribeContent }}</pre>
+                        </div>
+                    </template>
+                </div>
+                <!-- YAML 按钮区域 -->
+                <div v-if="statefulSetActiveTab === 'yaml'" class="modal-footer">
                     <div class="yaml-actions">
                         <div class="action-btn-wrapper">
                             <button class="action-btn" @click="toggleDropdown('configmaps')">ConfigMaps</button>
@@ -1368,6 +1583,118 @@
                                 <div v-if="deployPVCs.length === 0" class="dropdown-item">暂无数据</div>
                             </div>
                         </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Pod 详情弹窗 -->
+        <div :class="{ hidden: !showPodModal }" class="modal-overlay" @click.self="closePodModal">
+            <div class="modal-content resource-modal-content">
+                <div class="modal-header">
+                    <h2>{{ podDetailTitle }}</h2>
+                    <button class="modal-close" @click="closePodModal">×</button>
+                </div>
+                <div class="modal-tabs">
+                    <button :class="{ active: podActiveTab === 'log' }" class="tab-btn" @click="switchPodTab('log')">Log</button>
+                    <button :class="{ active: podActiveTab === 'describe' }" class="tab-btn" @click="switchPodTab('describe')">Describe</button>
+                </div>
+                <div class="modal-body">
+                    <!-- Log 内容 -->
+                    <template v-if="podActiveTab === 'log'">
+                        <div class="pre-wrapper">
+                            <button class="copy-btn" @click="copyToClipboard(podLogContent)">复制</button>
+                            <pre class="yaml-content">{{ podLogContent }}</pre>
+                        </div>
+                    </template>
+                    <!-- Describe 内容 -->
+                    <template v-else-if="podActiveTab === 'describe'">
+                        <div class="pre-wrapper">
+                            <button class="copy-btn" @click="copyToClipboard(podDescribeContent)">复制</button>
+                            <pre class="describe-content">{{ podDescribeContent }}</pre>
+                        </div>
+                    </template>
+                </div>
+                <!-- Log 标签页的刷新按钮 -->
+                <div v-if="podActiveTab === 'log'" class="modal-footer">
+                    <button class="action-btn" @click="loadPodLog">刷新日志</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Node 详情弹窗 -->
+        <div :class="{ hidden: !showNodeModal }" class="modal-overlay" @click.self="closeNodeModal">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h2>{{ nodeDetailTitle }}</h2>
+                    <button class="modal-close" @click="closeNodeModal">×</button>
+                </div>
+                <div class="modal-tabs">
+                    <button :class="{ active: nodeActiveTab === 'yaml' }" class="tab-btn" @click="switchNodeTab('yaml')">YAML</button>
+                    <button :class="{ active: nodeActiveTab === 'describe' }" class="tab-btn" @click="switchNodeTab('describe')">Describe</button>
+                    <button :class="{ active: nodeActiveTab === 'pods' }" class="tab-btn" @click="switchNodeTab('pods')">Pods</button>
+                </div>
+                <div class="modal-body">
+                    <!-- YAML 内容 -->
+                    <template v-if="nodeActiveTab === 'yaml'">
+                        <div class="pre-wrapper">
+                            <button class="copy-btn" @click="copyToClipboard(nodeYamlContent)">复制</button>
+                            <pre class="yaml-content">{{ nodeYamlContent }}</pre>
+                        </div>
+                    </template>
+                    <!-- Describe 内容 -->
+                    <template v-else-if="nodeActiveTab === 'describe'">
+                        <div class="pre-wrapper">
+                            <button class="copy-btn" @click="copyToClipboard(nodeDescribeContent)">复制</button>
+                            <pre class="describe-content">{{ nodeDescribeContent }}</pre>
+                        </div>
+                    </template>
+                    <!-- Pods 内容 -->
+                    <template v-else-if="nodeActiveTab === 'pods'">
+                        <div class="table-container">
+                            <table class="data-table">
+                                <thead>
+                                    <tr>
+                                        <th>NAMESPACE</th>
+                                        <th>NAME</th>
+                                        <th>READY</th>
+                                        <th>STATUS</th>
+                                        <th>RESTARTS</th>
+                                        <th>AGE</th>
+                                        <th>IP</th>
+                                        <th>NODE</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr v-for="pod in nodePods" :key="pod.name">
+                                        <td>{{ pod.namespace }}</td>
+                                        <td>{{ pod.name }}</td>
+                                        <td>{{ pod.ready }}</td>
+                                        <td>{{ pod.status }}</td>
+                                        <td>{{ pod.restarts }}</td>
+                                        <td>{{ pod.age }}</td>
+                                        <td>{{ pod.ip }}</td>
+                                        <td>{{ pod.node }}</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </template>
+                </div>
+            </div>
+        </div>
+
+        <!-- Service 详情弹窗 -->
+        <div :class="{ hidden: !showServiceModal }" class="modal-overlay" @click.self="closeServiceModal">
+            <div class="modal-content service-modal-content">
+                <div class="modal-header">
+                    <h2>{{ serviceDetailTitle }}</h2>
+                    <button class="modal-close" @click="closeServiceModal">×</button>
+                </div>
+                <div class="modal-body">
+                    <div class="pre-wrapper">
+                        <button class="copy-btn" @click="copyToClipboard(serviceYamlContent)">复制</button>
+                        <pre class="yaml-content">{{ serviceYamlContent }}</pre>
                     </div>
                 </div>
             </div>
@@ -1517,6 +1844,7 @@
                     { key: 'statefulsets', label: 'StatefulSets', },
                     { key: 'deploy', label: 'Deploy', },
                     { key: 'ingress', label: 'Ingress',},
+                    { key: 'services', label: 'Services',},
                 ])
 
                 // 状态管理
@@ -1536,12 +1864,14 @@
                 const ingresses = ref([])
                 const daemonSets = ref([])
                 const statefulSets = ref([])
+                const services = ref([])
                 
                 // 全量数据存储（用于命名空间过滤）
                 const fullDeploys = ref([])
                 const fullIngresses = ref([])
                 const fullDaemonSets = ref([])
                 const fullStatefulSets = ref([])
+                const fullServices = ref([])
 
                 // 弹窗状态
                 const showDeployModal = ref(false)
@@ -1550,6 +1880,15 @@
                 const showStatefulSetModal = ref(false)
                 const showResourceModal = ref(false)
                 const showConfigMapContentModal = ref(false)
+                const showServiceModal = ref(false)
+                // Node 详情
+                const showNodeModal = ref(false)
+                const nodeDetailTitle = ref('')
+                const nodeActiveTab = ref('yaml')
+                const nodeYamlContent = ref('')
+                const nodeDescribeContent = ref('')
+                const nodePods = ref([])
+                const currentNodeName = ref('')
                 
                 // 弹框层级，用于计算宽度
                 const modalLevel = ref(0)
@@ -1570,6 +1909,37 @@
                 const deploySecrets = ref([])
                 const deployPVCs = ref([])
                 const currentDeployNamespace = ref('')
+                const currentDeployName = ref('')
+
+                // Pod 详情
+                const showPodModal = ref(false)
+                const podDetailTitle = ref('')
+                const podActiveTab = ref('log')
+                const podLogContent = ref('')
+                const podDescribeContent = ref('')
+                const currentPodName = ref('')
+
+                // 消息提示
+                const showMessage = ref(false)
+                const messageText = ref('')
+                const messageType = ref('success')
+                const messageDuration = ref(1000)
+                let messageTimer = null
+
+                const showToast = (message, type = 'success', duration = 1000) => {
+                    messageText.value = message
+                    messageType.value = type
+                    messageDuration.value = duration
+                    showMessage.value = true
+                    
+                    if (messageTimer) {
+                        clearTimeout(messageTimer)
+                    }
+                    
+                    messageTimer = setTimeout(() => {
+                        showMessage.value = false
+                    }, duration)
+                }
 
                 // Ingress 详情
                 const ingressDetailTitle = ref('')
@@ -1579,10 +1949,16 @@
                 // DaemonSet 详情
                 const daemonSetDetailTitle = ref('')
                 const daemonSetYamlContent = ref('')
+                const daemonSetActiveTab = ref('yaml')
+                const daemonSetPods = ref([])
+                const daemonSetDescribeContent = ref('')
 
                 // StatefulSet 详情
                 const statefulSetDetailTitle = ref('')
                 const statefulSetYamlContent = ref('')
+                const statefulSetActiveTab = ref('yaml')
+                const statefulSetPods = ref([])
+                const statefulSetDescribeContent = ref('')
 
                 // 资源详情
                 const resourceDetailTitle = ref('')
@@ -1596,6 +1972,10 @@
                 // PV 详情
                 const pvDetailTitle = ref('')
                 const pvYamlContent = ref('')
+
+                // Service 详情
+                const serviceDetailTitle = ref('')
+                const serviceYamlContent = ref('')
 
                 // ConfigMap 内容
                 const configMapContentTitle = ref('')
@@ -1637,6 +2017,7 @@
                         case 'ingress': return ingresses.value.length
                         case 'daemonsets': return daemonSets.value.length
                         case 'statefulsets': return statefulSets.value.length
+                        case 'services': return services.value.length
                         default: return 0
                     }
                 })
@@ -1712,14 +2093,19 @@
                     return statefulSets.value.slice(start, start + pageSize.value)
                 })
 
+                const paginatedServices = computed(() => {
+                    const start = (currentPage.value - 1) * pageSize.value
+                    return services.value.slice(start, start + pageSize.value)
+                })
+
                 // 方法
                 const executeCommand = async (cmd) => {
                     if (!baseUrl.value) {
-                        alert('请先配置基础URL')
+                        showToast('请先配置基础URL', 'error', 3000)
                         return null
                     }
                     if (!host.value) {
-                        alert('请先配置主机名')
+                        showToast('请先配置主机名', 'error', 3000)
                         return null
                     }
                     try {
@@ -1737,7 +2123,7 @@
                         
                         if (!response.ok) {
                             const errorText = await response.text()
-                            alert(`HTTP请求失败: \n${baseUrl.value}\n${errorText}`)
+                            showToast(`HTTP请求失败: ${errorText}`, 'error', 3000)
                             return null
                         }
                         
@@ -1745,16 +2131,16 @@
                         
                         if (result && result.status !== 1) {
                             if (result.msg) {
-                                alert(result.msg)
+                                showToast(result.msg, 'error')
                             } else {
-                                alert(`请求失败: ${JSON.stringify(result)}`)
+                                showToast(`请求失败: ${JSON.stringify(result)}`, 'error', 3000)
                             }
                             return null
                         }
                         
                         return result
                     } catch (error) {
-                        alert(`网络错误: ${error.message}`)
+                        showToast(`网络错误: ${error.message}`, 'error', 3000)
                         return null
                     }
                 }
@@ -1905,6 +2291,32 @@
                     loading.value = false
                 }
 
+                const loadServices = async () => {
+                    loading.value = true
+                    const result = await executeCommand('kubectl get services -A -o wide')
+                    if (result && result.status === 1 && result.data.exit_code === '0') {
+                        const lines = result.data.stdout.trim().split('\n')
+                        const svcList = []
+                        for (let i = 1; i < lines.length; i++) {
+                            const parts = lines[i].split(/\s+/)
+                            svcList.push({
+                                namespace: parts[0],
+                                name: parts[1],
+                                type: parts[2],
+                                clusterIP: parts[3],
+                                externalIP: parts[4],
+                                port: parts[5],
+                                age: parts[parts.length - 1],
+                                selector: parts.length > 6 ? parts[6] : ''
+                            })
+                        }
+                        fullServices.value = svcList
+                        // 根据当前命名空间过滤
+                        filterByNamespace()
+                    }
+                    loading.value = false
+                }
+
                 const switchMenu = async (menuKey) => {
                     activeMenu.value = menuKey
                     currentPage.value = 1
@@ -1929,6 +2341,10 @@
                             if (fullStatefulSets.value.length === 0) await loadStatefulSets()
                             else filterByNamespace()
                             break
+                        case 'services':
+                            if (fullServices.value.length === 0) await loadServices()
+                            else filterByNamespace()
+                            break
                     }
                 }
 
@@ -1939,11 +2355,13 @@
                         ingresses.value = fullIngresses.value
                         daemonSets.value = fullDaemonSets.value
                         statefulSets.value = fullStatefulSets.value
+                        services.value = fullServices.value
                     } else {
                         deploys.value = fullDeploys.value.filter(d => d.namespace === ns)
                         ingresses.value = fullIngresses.value.filter(i => i.namespace === ns)
                         daemonSets.value = fullDaemonSets.value.filter(ds => ds.namespace === ns)
                         statefulSets.value = fullStatefulSets.value.filter(ss => ss.namespace === ns)
+                        services.value = fullServices.value.filter(s => s.namespace === ns)
                     }
                 }
 
@@ -1980,6 +2398,7 @@
                 const showDeployDetail = async (deploy) => {
                     deployDetailTitle.value = `deploy/${deploy.name} -n ${deploy.namespace}`
                     currentDeployNamespace.value = deploy.namespace
+                    currentDeployName.value = deploy.name
                     deployActiveTab.value = 'yaml'
                     modalLevel.value++
                     showDeployModal.value = true
@@ -2039,9 +2458,17 @@
                     closeAllDropdowns()
                     
                     if (tab === 'pods') {
-                        const result = await executeCommand(`kubectl get pods -n ${currentDeployNamespace.value} -l app=${deployDetailTitle.value.split('/')[1]} -o wide`)
+                        let cmd = `kubectl get pods -n ${currentDeployNamespace.value} -l app=${currentDeployName.value} -o wide`
+                        let result = await executeCommand(cmd)
                         if (result && result.status === 1 && result.data.exit_code === '0') {
-                            const lines = result.data.stdout.trim().split('\n')
+                            // 查询结果为空
+                            if (result.data.stdout.trim() === '') {
+                                showToast(`${cmd} 无结果, 请确认label是否正确`, 'error')
+                                return
+                            }
+
+                            let lines = result.data.stdout.trim().split('\n')
+                            
                             const podList = []
                             for (let i = 1; i < lines.length; i++) {
                                 const parts = lines[i].split(/\s+/)
@@ -2060,7 +2487,7 @@
                             deployPods.value = podList
                         }
                     } else if (tab === 'describe') {
-                        const result = await executeCommand(`kubectl describe deploy ${deployDetailTitle.value.split('/')[1]} -n ${currentDeployNamespace.value}`)
+                        const result = await executeCommand(`kubectl describe deploy ${currentDeployName.value} -n ${currentDeployNamespace.value}`)
                         if (result && result.status === 1 && result.data.exit_code === '0') {
                             deployDescribeContent.value = result.data.stdout
                         }
@@ -2149,10 +2576,120 @@
                     closeAllDropdowns()
                 }
 
+                // Node 详情
+                const showNodeDetail = async (node) => {
+                    nodeDetailTitle.value = `node/${node.name}`
+                    currentNodeName.value = node.name
+                    nodeActiveTab.value = 'yaml'
+                    showNodeModal.value = true
+                    
+                    const result = await executeCommand(`kubectl get node ${node.name} -o yaml`)
+                    if (result && result.status === 1 && result.data.exit_code === '0') {
+                        nodeYamlContent.value = result.data.stdout
+                    }
+                }
+
+                const closeNodeModal = () => {
+                    showNodeModal.value = false
+                }
+
+                const switchNodeTab = async (tab) => {
+                    nodeActiveTab.value = tab
+                    
+                    if (tab === 'yaml') {
+                        const result = await executeCommand(`kubectl get node ${currentNodeName.value} -o yaml`)
+                        if (result && result.status === 1 && result.data.exit_code === '0') {
+                            nodeYamlContent.value = result.data.stdout
+                        }
+                    } else if (tab === 'describe') {
+                        const result = await executeCommand(`kubectl describe node ${currentNodeName.value}`)
+                        if (result && result.status === 1 && result.data.exit_code === '0') {
+                            nodeDescribeContent.value = result.data.stdout
+                        }
+                    } else if (tab === 'pods') {
+                        const result = await executeCommand(`kubectl get pods -o wide -A --field-selector spec.nodeName=${currentNodeName.value}`)
+                        if (result && result.status === 1 && result.data.exit_code === '0') {
+                            const lines = result.data.stdout.trim().split('\n')
+                            const podList = []
+                            for (let i = 1; i < lines.length; i++) {
+                                const parts = lines[i].split(/\s+/)
+                                podList.push({
+                                    namespace: parts[0],
+                                    name: parts[1],
+                                    ready: parts[2],
+                                    status: parts[3],
+                                    restarts: parts[4],
+                                    age: parts[5],
+                                    ip: parts[6],
+                                    node: parts[7]
+                                })
+                            }
+                            nodePods.value = podList
+                        }
+                    }
+                }
+
+                // Pod 详情
+                const showPodDetail = async (pod) => {
+                    podDetailTitle.value = `pod/${pod.name} -n ${currentDeployNamespace.value}`
+                    currentPodName.value = pod.name
+                    podActiveTab.value = 'log'
+                    showPodModal.value = true
+                    
+                    await loadPodLog()
+                }
+
+                const closePodModal = () => {
+                    showPodModal.value = false
+                }
+
+                const loadPodLog = async () => {
+                    const result = await executeCommand(`kubectl logs --tail=30 -n ${currentDeployNamespace.value} ${currentPodName.value}`)
+                    if (result && result.status === 1 && result.data.exit_code === '0') {
+                        podLogContent.value = result.data.stdout
+                        showToast('日志加载成功', 'success')
+                    } else {
+                        podLogContent.value = result?.data?.stderr || '获取日志失败'
+                        showToast('日志加载失败', 'error')
+                    }
+                }
+
+                const switchPodTab = async (tab) => {
+                    podActiveTab.value = tab
+                    
+                    if (tab === 'log') {
+                        await loadPodLog()
+                    } else if (tab === 'describe') {
+                        const result = await executeCommand(`kubectl describe pod -n ${currentDeployNamespace.value} ${currentPodName.value}`)
+                        if (result && result.status === 1 && result.data.exit_code === '0') {
+                            podDescribeContent.value = result.data.stdout
+                        } else {
+                            podDescribeContent.value = result?.data?.stderr || '获取描述失败'
+                        }
+                    }
+                }
+
+                // Service 详情
+                const showServiceDetail = async (svc) => {
+                    serviceDetailTitle.value = `service/${svc.name} -n ${svc.namespace}`
+                    showServiceModal.value = true
+                    
+                    const result = await executeCommand(`kubectl get service ${svc.name} -n ${svc.namespace} -o yaml`)
+                    if (result && result.status === 1 && result.data.exit_code === '0') {
+                        serviceYamlContent.value = result.data.stdout
+                    }
+                }
+
+                const closeServiceModal = () => {
+                    showServiceModal.value = false
+                }
+
                 // DaemonSet 详情
                 const showDaemonSetDetail = async (ds) => {
                     daemonSetDetailTitle.value = `daemonset/${ds.name} -n ${ds.namespace}`
                     currentDeployNamespace.value = ds.namespace
+                    currentDeployName.value = ds.name
+                    daemonSetActiveTab.value = 'yaml'
                     modalLevel.value++
                     showDaemonSetModal.value = true
                     
@@ -2168,10 +2705,54 @@
                     modalLevel.value = Math.max(0, modalLevel.value - 1)
                 }
 
+                // 切换 DaemonSet tab
+                const switchDaemonSetTab = async (tab) => {
+                    daemonSetActiveTab.value = tab
+                    closeAllDropdowns()
+                    
+                    if (tab === 'pods') {
+                        const cmd = `kubectl get pods -n ${currentDeployNamespace.value} -l app=${currentDeployName.value} -o wide`
+                        let result = await executeCommand(cmd)
+                        if (result && result.status === 1 && result.data.exit_code === '0') {
+                            // 查询结果为空
+                            if (result.data.stdout.trim() === '') {
+                                showToast(`${cmd} 无结果, 请确认label是否正确`, 'error')
+                                return
+                            }
+
+                            let lines = result.data.stdout.trim().split('\n')
+
+                            const podList = []
+                            for (let i = 1; i < lines.length; i++) {
+                                const parts = lines[i].split(/\s+/)
+                                podList.push({
+                                    name: parts[0],
+                                    ready: parts[1],
+                                    status: parts[2],
+                                    restarts: parts[3],
+                                    age: parts[4],
+                                    ip: parts[5],
+                                    node: parts[6],
+                                    nominated: parts[7],
+                                    readiness: parts[8]
+                                })
+                            }
+                            daemonSetPods.value = podList
+                        }
+                    } else if (tab === 'describe') {
+                        const result = await executeCommand(`kubectl describe daemonset ${currentDeployName.value} -n ${currentDeployNamespace.value}`)
+                        if (result && result.status === 1 && result.data.exit_code === '0') {
+                            daemonSetDescribeContent.value = result.data.stdout
+                        }
+                    }
+                }
+
                 // StatefulSet 详情
                 const showStatefulSetDetail = async (ss) => {
                     statefulSetDetailTitle.value = `statefulset/${ss.name} -n ${ss.namespace}`
                     currentDeployNamespace.value = ss.namespace
+                    currentDeployName.value = ss.name
+                    statefulSetActiveTab.value = 'yaml'
                     modalLevel.value++
                     showStatefulSetModal.value = true
                     
@@ -2185,6 +2766,48 @@
                 const closeStatefulSetModal = () => {
                     showStatefulSetModal.value = false
                     modalLevel.value = Math.max(0, modalLevel.value - 1)
+                }
+
+                // 切换 StatefulSet tab
+                const switchStatefulSetTab = async (tab) => {
+                    statefulSetActiveTab.value = tab
+                    closeAllDropdowns()
+                    
+                    if (tab === 'pods') {
+                        const cmd = `kubectl get pods -n ${currentDeployNamespace.value} -l app=${currentDeployName.value} -o wide`
+                        let result = await executeCommand(cmd)
+                        if (result && result.status === 1 && result.data.exit_code === '0') {
+                            // 查询结果为空
+                            if (result.data.stdout.trim() === '') {
+                                showToast(`${cmd} 无结果, 请确认label是否正确`, 'error')
+                                return
+                            }
+
+                            let lines = result.data.stdout.trim().split('\n')
+                            
+                            const podList = []
+                            for (let i = 1; i < lines.length; i++) {
+                                const parts = lines[i].split(/\s+/)
+                                podList.push({
+                                    name: parts[0],
+                                    ready: parts[1],
+                                    status: parts[2],
+                                    restarts: parts[3],
+                                    age: parts[4],
+                                    ip: parts[5],
+                                    node: parts[6],
+                                    nominated: parts[7],
+                                    readiness: parts[8]
+                                })
+                            }
+                            statefulSetPods.value = podList
+                        }
+                    } else if (tab === 'describe') {
+                        const result = await executeCommand(`kubectl describe statefulset ${currentDeployName.value} -n ${currentDeployNamespace.value}`)
+                        if (result && result.status === 1 && result.data.exit_code === '0') {
+                            statefulSetDescribeContent.value = result.data.stdout
+                        }
+                    }
                 }
 
                 // 资源详情
@@ -2294,11 +2917,11 @@
                 const confirmSettings = async () => {
                     // 检查是否填写了有效的 baseUrl 和 host
                     if (!settingsBaseUrl.value || !settingsBaseUrl.value.trim()) {
-                        alert('请输入有效的 baseUrl')
+                        showToast('请输入有效的 baseUrl', 'error')
                         return
                     }
                     if (!settingsHost.value || !settingsHost.value.trim()) {
-                        alert('请选择或输入有效的 host')
+                        showToast('请选择或输入有效的 host', 'error')
                         return
                     }
                     
@@ -2380,7 +3003,7 @@
                     try {
                         if (navigator.clipboard) {
                             await navigator.clipboard.writeText(text)
-                            alert('复制成功')
+                            showToast('复制成功', 'success')
                         } else {
                             const textarea = document.createElement('textarea')
                             textarea.value = text
@@ -2390,11 +3013,11 @@
                             textarea.select()
                             document.execCommand('copy')
                             document.body.removeChild(textarea)
-                            alert('复制成功')
+                            showToast('复制成功', 'success')
                         }
                     } catch (err) {
                         console.error('复制失败:', err)
-                        alert('复制失败')
+                        showToast('复制失败', 'error')
                     }
                 }
 
@@ -2496,8 +3119,28 @@
                     ingressServices,
                     daemonSetDetailTitle,
                     daemonSetYamlContent,
+                    daemonSetActiveTab,
+                    daemonSetPods,
+                    daemonSetDescribeContent,
                     statefulSetDetailTitle,
                     statefulSetYamlContent,
+                    statefulSetActiveTab,
+                    statefulSetPods,
+                    statefulSetDescribeContent,
+                    showPodModal,
+                    podDetailTitle,
+                    podActiveTab,
+                    podLogContent,
+                    podDescribeContent,
+                    showMessage,
+                    messageText,
+                    messageType,
+                    showNodeModal,
+                    nodeDetailTitle,
+                    nodeActiveTab,
+                    nodeYamlContent,
+                    nodeDescribeContent,
+                    nodePods,
                     resourceDetailTitle,
                     resourceYamlContent,
                     resourceType,
@@ -2532,8 +3175,19 @@
                     closeIngressModal,
                     showDaemonSetDetail,
                     closeDaemonSetModal,
+                    switchDaemonSetTab,
                     showStatefulSetDetail,
                     closeStatefulSetModal,
+                    switchStatefulSetTab,
+                    showServiceDetail,
+                    closeServiceModal,
+                    showPodDetail,
+                    closePodModal,
+                    loadPodLog,
+                    switchPodTab,
+                    showNodeDetail,
+                    closeNodeModal,
+                    switchNodeTab,
                     showResourceYaml,
                     closeResourceModal,
                     showConfigMapContent,
@@ -2551,7 +3205,13 @@
                     getHostDesc,
                     toggleDropdown,
                     closeAllDropdowns,
-                    copyToClipboard
+                    copyToClipboard,
+                    showToast,
+                    paginatedServices,
+                    services,
+                    showServiceModal,
+                    serviceDetailTitle,
+                    serviceYamlContent
                 }
             }
         }).mount('#app')
